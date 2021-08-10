@@ -33,16 +33,4 @@ train_combined<-wine_combined[sample_combined, ] #training data
 test_combined<-wine_combined[-sample_combined, ] 
 
 
-#correlation matrix
-res <- cor(wine_combined)
-round(res, 2)
-
-library(ggplot2)
-# Building histogram for distribution of quality 
-ggplot(data=wine_combined, aes(wine_combined$quality)) +
-  geom_histogram(aes(y =..density..), fill = "orange") +
-  geom_density() 
-#ordinal data, want to categorize wine as low or high quality 
-
-
 

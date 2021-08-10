@@ -21,9 +21,9 @@ white_wine <- white_wine %>%
 
 #change color to factor
 red_wine$color<-factor(red_wine$color)
-levels(red_wine$color) <- c("red","white") 
+levels(red_wine$color) <- c('red') 
 white_wine$color<-factor(white_wine$color)
-levels(white_wine$color) <- c("red","white") 
+levels(white_wine$color) <- c('white') 
 
 #change quality_cat to factor 
 red_wine$quality_cat<-factor(red_wine$quality_cat)

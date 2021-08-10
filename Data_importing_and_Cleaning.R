@@ -13,22 +13,25 @@ red_wine <- red_wine %>%
 white_wine <- white_wine %>%
   mutate(color = 1) #white is 1
 
-wine_combined <- rbind(white_wine, red_wine) #combine datasets 
-
-wine_combined <- wine_combined %>%
+#add quality_cat
+red_wine <- red_wine %>%
+  mutate(quality_cat = ifelse(quality>=7, 1, 0)) #high quality 1, low quality 0
+white_wine <- white_wine %>%
   mutate(quality_cat = ifelse(quality>=7, 1, 0)) #high quality 1, low quality 0
 
 #change color to factor
-wine_combined$color<-factor(wine_combined$color)
-levels(wine_combined$color)
-levels(wine_combined$color) <- c("red","white") 
-levels(wine_combined$color)
+red_wine$color<-factor(red_wine$color)
+levels(red_wine$color) <- c("red","white") 
+white_wine$color<-factor(white_wine$color)
+levels(white_wine$color) <- c("red","white") 
 
 #change quality_cat to factor 
-wine_combined$quality_cat<-factor(wine_combined$quality_cat)
-levels(wine_combined$quality_cat)
-levels(wine_combined$quality_cat) <- c("low","high") 
-levels(wine_combined$quality_cat)
+red_wine$quality_cat<-factor(red_wine$quality_cat)
+levels(red_wine$quality_cat) <- c("low","high") 
+white_wine$quality_cat<-factor(white_wine$quality_cat)
+levels(white_wine$quality_cat) <- c("low","high") 
+
+wine_combined <- rbind(white_wine, red_wine) #combine datasets 
 
 #split into train and test data
 set.seed(1) #set seed 

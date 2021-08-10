@@ -5,8 +5,8 @@ library(gridExtra)
 white_wine <- read.csv('wineQualityWhites.csv')
 red_wine <- read.csv('wineQualityReds.csv')
 
-white_wine <- dplyr::select(white_wine, -free.sulfur.dioxide)
-red_wine <- dplyr::select(red_wine, -free.sulfur.dioxide)
+white_wine <- dplyr::select(white_wine, -c(free.sulfur.dioxide, X))
+red_wine <- dplyr::select(red_wine, -c(free.sulfur.dioxide, X))
 
 red_wine <- red_wine %>%
   mutate(color = 0) #red is 0

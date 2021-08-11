@@ -1,0 +1,162 @@
+---
+title: "EDA"
+author: "Timur Guler"
+date: "8/10/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(tidyverse)
+library(gridExtra)
+library(corrplot)
+library(ROCR)
+```
+
+Import data
+```{r}
+#train_combined <- read.csv("training_data.csv")
+#test_combined <- read.csv("testing_data.csv")
+
+
+```
+
+
+Look at correlation matrix
+```{r}
+corrplot(cor(train_combined[, c(-12, -13)]), method="color")
+corrplot(cor(train_red[, c(-12, -13)]), method="color")
+corrplot(cor(train_white[, c(-12, -13)]), method="color")
+```
+Differences in correlation matrix for red and white wine suggest that multicollinear relationships will be different.
+
+
+Quality vs Value for Red and White
+
+```{r}
+ggplot(data=train_combined, aes(x=fixed.acidity, y=quality, color=color))+
+  geom_point(alpha=0.3)+
+  geom_smooth(method='lm')+
+  labs(title="Quality by Fixed Acidity and Color")
+
+ggplot(data=train_combined, aes(x=volatile.acidity, y=quality, color=color))+
+  geom_point(alpha=0.3)+
+  geom_smooth(method='lm')+
+  labs(title="Quality by Volatile Acidity and Color")
+
+ggplot(data=train_combined, aes(x=citric.acid, y=quality, color=color))+
+  geom_point(alpha=0.3)+
+  geom_smooth(method='lm')+
+  labs(title="Quality by Citric Acid Acidity and Color")
+
+ggplot(data=train_combined, aes(x=residual.sugar, y=quality, color=color))+
+  geom_point(alpha=0.3)+
+  geom_smooth(method='lm')+
+  labs(title="Quality by Residual Sugar and Color")
+
+ggplot(data=train_combined, aes(x=chlorides, y=quality, color=color))+
+  geom_point(alpha=0.3)+
+  geom_smooth(method='lm')+
+  labs(title="Quality by Chlorides and Color")
+
+ggplot(data=train_combined, aes(x=total.sulfur.dioxide, y=quality, color=color))+
+  geom_point(alpha=0.3)+
+  geom_smooth(method='lm')+
+  labs(title="Quality by Sulfur Dioxide and Color")
+
+ggplot(data=train_combined, aes(x=pH, y=quality, color=color))+
+  geom_point(alpha=0.3)+
+  geom_smooth(method='lm')+
+  labs(title="Quality by pH and Color")
+
+ggplot(data=train_combined, aes(x=sulphates, y=quality, color=color))+
+  geom_point(alpha=0.3)+
+  geom_smooth(method='lm')+
+  labs(title="Quality by Sulphates and Color")
+
+ggplot(data=train_combined, aes(x=alcohol, y=quality, color=color))+
+  geom_point(alpha=0.3)+
+  geom_smooth(method='lm')+
+  labs(title="Quality by Alcohol and Color")
+
+
+
+```
+
+Two issues at play - some variables have different slopes, some variables have wide differences in range between red and white which could cause extrapolation effect.
+
+No obvious need for transformation.
+
+Facet Wrap of categorical quality distribution for red and white for each variable
+
+```{r}
+ggplot(data=train_combined, aes(x=quality_cat, y=fixed.acidity, color=color))+
+  geom_boxplot()+
+  facet_wrap(~color)+
+  labs(title="Differences in the Effect of Fixed Acidity on Quality, by Color")
+
+ggplot(data=train_combined, aes(x=quality_cat, y=volatile.acidity, color=color))+
+  geom_boxplot()+
+  facet_wrap(~color)+
+  labs(title="Differences in the Effect of Volatile Acidity on Quality, by Color")
+
+ggplot(data=train_combined, aes(x=quality_cat, y=citric.acid, color=color))+
+  geom_boxplot()+
+  facet_wrap(~color)+
+  labs(title="Differences in the Effect of Citric Acid on Quality, by Color")
+
+ggplot(data=train_combined, aes(x=quality_cat, y=residual.sugar, color=color))+
+  geom_boxplot()+
+  facet_wrap(~color)+
+  labs(title="Differences in the Effect of Residual Sugar on Quality, by Color")
+
+ggplot(data=train_combined, aes(x=quality_cat, y=chlorides, color=color))+
+  geom_boxplot()+
+  facet_wrap(~color)+
+  labs(title="Differences in the Effect of Chlorides on Quality, by Color")
+
+ggplot(data=train_combined, aes(x=quality_cat, y=total.sulfur.dioxide, color=color))+
+  geom_boxplot()+
+  facet_wrap(~color)+
+  labs(title="Differences in the Effect of Sulfur Dioxide on Quality, by Color")
+
+ggplot(data=train_combined, aes(x=quality_cat, y=density, color=color))+
+  geom_boxplot()+
+  facet_wrap(~color)+
+  labs(title="Differences in the Effect of Density on Quality, by Color")
+
+ggplot(data=train_combined, aes(x=quality_cat, y=pH, color=color))+
+  geom_boxplot()+
+  facet_wrap(~color)+
+  labs(title="Differences in the Effect of pH on Quality, by Color")
+
+ggplot(data=train_combined, aes(x=quality_cat, y=sulphates, color=color))+
+  geom_boxplot()+
+  facet_wrap(~color)+
+  labs(title="Differences in the Effect of Sulphates on Quality, by Color")
+
+ggplot(data=train_combined, aes(x=quality_cat, y=alcohol, color=color))+
+  geom_boxplot()+
+  facet_wrap(~color)+
+  labs(title="Differences in the Effect of Alcohol on Quality, by Color")
+
+```
+
+most promising predictors:
+- acidity measures
+- sulphates
+- alcohol
+- chlorides (heavily affected by outliers)
+- sulfur dioxides
+
+
+
+```{r}
+pairs(train_red[, c(-12, -13)], lower.panel=NULL)
+pairs(train_white[, c(-12, -13)], lower.panel=NULL)
+```
+
+
+
+

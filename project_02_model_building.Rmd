@@ -70,25 +70,16 @@ test_combined <- rbind(test_white, test_red)
 # Model Building
 
 ## Red Wine Model
-
-Based on EDA, separate models for white and red, perform all possible regression for red data set all possible regression WITH RED WINE DATA ONLY
-
 ```{r}
 train_red <- train_red %>% dplyr::select(-c(color, quality))
 train_white <- train_white %>% dplyr::select(-c(color, quality))
 ```
 
-```{r}
-#all possible regression model, based on R2 and Mallow's Cp -> 7-predictor model
-model1_red <- glm(quality_cat~ alcohol+volatile.acidity+sulphates+fixed.acidity+density+residual.sugar+chlorides, 
-                  family='binomial', data=train_red)
-summary(model1_red) #AIC score 738.12
-```
+Our initial Exploratory Data Analysis suggests that we should build two separate models to classify the quality of red and white wines as "low" or "high". We decided to employ the all possible regressions procedure to determine which of the ten predictors may be considered the most important in predicting the quality category of red wine. All-possible-regressions is an automated procedure that goes beyond stepwise regression and tests all possible subsets of the set of potential independent variables, which in the context of our problem is 2^10 = 1024 possible subsets. We set the default value for nbest to 1, which tells the algorithm to return the one best set of predictors (based on R2) for each number of possible predictors. We also set nvmax to 10 so all possible subsets are displayed.
 
 ```{r}
 allreg_red <- regsubsets(quality_cat ~., data=train_red, nbest=1, nvmax=10)
 summary(allreg_red)
-
 #R2
 which.max(summary(allreg_red)$adjr2)
 #model 9 is the best based on R2
@@ -100,32 +91,32 @@ which.min(summary(allreg_red)$bic)
 #model 7 based on BIC
 ```
 
+After running the algorithm, we extract the best models based on the following criteria: R2, Mallow's Cp and BIC. For allreg_red, model 9 has the best adjusted R2, model 8 has the best Mallow's Cp and model 7 has the best BIC. In our case, the model number corresponds to the number of predictors being used. Based on these results, we select the proposed 7-predictor model for our initial model building process. The 7-predictor model uses the following predictor variables to classify the quality of red wine as "low" or "high": alcohol, volatile.acidity, sulphates, fixed.acidity, density, residual.sugar and chlorides.
 
-all possible regression model, based on R2 and Mallow's Cp -> 7-predictor model  
-best 7-predictor model: alcohol, volatile.acidity, sulphates, fixed.acidity, density, residual.sugar, chlorides citric.acid, fixed.acidity  
+```{r}
+#all possible regression model, based on BIC -> 7-predictor model
+model1_red <- glm(quality_cat~ alcohol+volatile.acidity+sulphates+fixed.acidity+density+residual.sugar+chlorides, 
+                  family='binomial', data=train_red)
+summary(model1_red) #AIC score 738.12
+```
+The fitted 7-predictor logistic regression equation for red wine is displayed as follows:
 
-EQUATION for 7-predictor red wine model: log(pi(quality)/1+pi(quality)) = 285.10221 + (0.72351)alcohol + (-2.82651)volatile.acidity + (3.23950)sulphates +  (0.36775)fixed.acidity + (-299.78128)density + (0.17416)residual.sugar + (-7.54886)chlorides  
+log(pi(quality)/1+pi(quality)) =(285.10221 + (0.72351)alcohol + (-2.82651)volatile.acidity + (3.23950)sulphates +  (0.36775)fixed.acidity + (-299.78128)density + (0.17416)residual.sugar + (-7.54886)chlorides  
 
-based on wald's test all predictors appears to be sig  
+The Z test associated with all the coefficients are considered statistically significant at the .05 level, which suggests that all 7 predictor variables should be kept in our model. 
 
-CHECKING ALL ASSUMPTIONS FOR 7-PRED MODEL
+The next step in our procedure is to check that our proposed model meets all the assumptions for logistic regressions, which are defined as follows:
 
-1)The outcome is a binary or dichotomous variable like yes vs no, positive vs negative, 1 vs 0.
-2)There is a linear relationship between the logit of the outcome and each predictor variables. 
-Recall that the logit function is logit(p) = log(p/(1-p)), where p is the probabilities of the outcome.
-3)There is no influential values (extreme values or outliers) in the continuous predictors
-4)There is no high intercorrelations (i.e. multicollinearity) among the predictors.
+1) There is a linear relationship between the logit of the outcome and each predictor variables. 
+2) There are no influential values (extreme values or outliers) in the continuous predictors
+3) There are no high intercorrelations (i.e. multicollinearity) among the predictors.
 
+To determine that the first assumption has been met, we check the linear relationship between continuous predictor variables and the logit of the outcome. This is done by visually inspecting the scatter plot between each predictor variable and the logit values. 
 ```{r}
 probabilities <- predict(model1_red, type = "response")
 predicted.classes <- ifelse(probabilities > 0.5, "pos", "neg")
 head(predicted.classes)
-```
 
-ASSUMPTION 1) Linearity assumption  
-Select only numeric predictors  
-
-```{r}
 model_red <- train_red%>%
   dplyr::select(is.numeric) 
 predictors <- colnames(model_red)
@@ -140,21 +131,12 @@ ggplot(model_red, aes(logit, predictor.value))+
   theme_bw() + 
   facet_wrap(~predictors, scales = "free_y")
 ```
+The smoothed scatter plots show that alcohol, sulphates and volatile.acidity are quite linearly associated with the quality_cat outcome in logit scale. The smoother scatter plots for the other predictor variables show little to no linear association with the quality_cat outcome in logit scale, which leads us to believe they are weaker predictors. None of the scatterplots lead us to believe that assumption 1 has been violated, and we therefore move on without transforming variables and begin to explore our next assumption. 
 
-scatterplots identify linear relationship between continuous predictor variables and the logit of the outcome  
-
-observations  
-1) alcohol, sulphates, volatile.acidity appear to be linearly associated with quality_cat outcome in logit scale  
-2)chlorides, density, pH, residual.sugar, fixed acidity, total.sulfur.dioxide, citric.acid do not appear to have an association with quality_cat outcome in logit scale  
-(weak predictors?)  
-Therefore, no need to transform, move onto next assumption  
-
-best 7-predictor model: alcohol, volatile.acidity, total.sulfur.dioxide, sulphates, chlorides,
-citric.acid, fixed.acidity
-
-ASSUMPTION 2 -> outliers and inluential variables 
-residuals -> used to help detect outliers 
+Next, we generate the residuals, studentized residuals and externally studentized residuals associated with our 7-predictor model to help detect any outliers. We combine these residual values into a dataframe and create scatterplots of the studentized and externally studentized residuals in order to visually inspect for the presence of outliers.
 ```{r}
+#ASSUMPTION 2 -> outliers and inluential variables 
+#residuals -> used to help detect outliers 
 res<-model1_red$residuals
 # studentized residuals 
 student.res<-rstandard(model1_red)
@@ -173,7 +155,9 @@ plot(model1_red$fitted.values,ext.student.res,
      ylim=c(-4.5,4.5))
 #plots look very similar, suggests that there are no outliers 
 ```
+The resulting plots look very similar, which leads us to believe there are no outliers in our model. 
 
+Next, we calculate leverages to identify how far each observation is from the center of the predictor space. If the leverage is greater than 2p/n, the associated observation may be deemed to have high leverage and is considered outlying in the predictor space. In this case p, which corresponds to the number of predictor variables in our model, is 7 and n, the number of records in our training set for red wine, is 1279. 
 ```{r}
 #leverage
 p <- 7 #7 predictor model
@@ -182,13 +166,18 @@ lev<-lm.influence(model1_red)$hat
 ##identify high leverage points 
 lev[lev>2*p/n]
 #high leverage observations are data points that are likely to be influential 
+```
 
+Due to the number of observations that were found to have high leverage, we decided to calculate Cook's Distance in order to determine if these high leverage observations were influential and were consequently negatively affecting our regression model. We decided to use Cook's distance measure as we are mainly concerned with the predictive ability of our logistic model. A large value indicates that the observation has a large influence on the results. The Cook's Distance of each observation was compared to the a cut off value generated by the following F distribution: F0.5,p,n-p, where p is 7 and n is 1279.
+
+```{r}
 #influential 
 #cooks distance
 COOKS<-cooks.distance(model1_red)
 COOKS[COOKS>qf(0.5,p,n-p)]
 #no influential points based on COOK's distance
 
+#DONT THINK WE NEED THESE
 ##dffits
 DFFITS<-dffits(model1_red)
 DFFITS[abs(DFFITS)>2*sqrt(p/n)]
@@ -200,14 +189,32 @@ abs(DFBETAS)>2/sqrt(n)
 #shows influential points, again more concerned with prediction, rely more on cook's distance 
 ```
 
-ASSUMPTION 3
-mutlicollinearity 
+None of the generated Cook's distance values exceeded the cutoff value, which leads us to believe that none of our observations in our model are influential. We conclude that assumption 2 has been met, and move on to the final assumption.
+
+Next, we check for multicollinearity in our model. Multicollinearity corresponds to a situation where two or more predictors are linearly dependent on each other. When two or more predictors are linearly dependent, they do not provide independent information to the response, resulting in large standard errors for the coefficients. We can check for multicollinearity by computing the variance inflation factors (VIFs) for each predictor variable. As a rule of thumb, A VIF value that exceeds 5 indicates a problematic amount of collinearity and needs to be explored, whereas a value greater than 10 indicates a serious amount of collinearity and must be immediately addressed. 
 
 ```{r}
+#ASSUMPTION 3
+#mutlicollinearity 
 vif(dplyr::select(train_red, c(alcohol,volatile.acidity,sulphates,fixed.acidity,density,residual.sugar,chlorides)))
 #VIF score above 10 indicates high correlation, cause for concern, VIF scores less than 10 across the board
 #############################################################
+```
+The resulting VIFs are below 5 for all 7 of the predictor variables in our model, which leads us to conclude that the third assumption has been satisfied. 
 
+After checking that all the model assumptions have been met, we move on to comparing our 7-predictor model with other possible logistic regression models using Likelihood Ratio Tests (LRTs) to evaluate if our proposed model is useful in classifying red wine as either "low" or "high" quality (quality_cat). 
+
+First, we compare our 7-predictor model to the intercept only model. 
+
+The null hypothesis is:
+Ho:beta(alcohol)=beta(volatile.acidity)=beta3(sulphates)=beta4(fixed.acidity)=beta5(density)=beta6(residual.sugar)=beta7(chlorides)=0 
+
+versus the alternative hypothesis:
+
+Ha:at least one of the coefficients is not zero. 
+
+We calculate the test statistic, which measures the difference in loglikelihoods of the models we are comparing, and compare it with a chi square distribution, where the degrees of freedom equal the number of coefficients we are testing (7). For this comparison, the test statistic is the difference in the null deviance and residual deviance of the 7-predictor model.
+```{r}
 #TESTING MODEL 7-PRED MODEL
 #############################################################
 #Test that 7-predictor model is useful
@@ -220,45 +227,59 @@ TS
 #p-value 
 1-pchisq(TS,7)
 #p-value is 0
-#So we reject the null hypothesis. The 7-predictor model is chosen over the intercept-only model; 
+#So we reject the null hypothesis. The 7-predictor model is chosen over the intercept-only model;
 #the 7-predictor model is useful.
+```
+The generated test statistic is 291.5332 with an associated p-value of 0. Therefore, we reject the null hypothesis and conclude that our 7-predictor model is useful and should be selected over the intercept-only model.
 
+Next, we decide to compare our 7-predictor model to the full (10-predictor) model. 
+
+The null hypothesis is:
+Ho:beta(pH)=beta(citric.acid)=beta(total.sulfur.dioxide)=0
+
+versus the alternative hypothesis: 
+
+Ha:at least one of the coefficients is not zero. 
+
+Again we calculate the test statistic, and compare it with a chi square distribution with 3 degrees of freedom (as we are testing 3 coefficients). For this comparison, the test statistic is the difference in the residual deviances of both models.
+```{r}
 #test if 7-predictor model more useful then full (10 predictor model)
 #H0: beta8=beta9=beta10=0
 #HA: at least one of the coefficients in HO is not zero
 full_red<-glm(quality_cat ~ ., family = "binomial", data=train_red)
-summary(full_red) #10-predictor model
 
 TS2<-model1_red$deviance-full_red$deviance
-TS2  #1.502435
+TS2  #13.3604
 #pvalue
-1-pchisq(TS2,3)
+1-pchisq(TS2,3) #0.003918644
 ```
+The generated test statistic is 13.3604 with an associated p-value of 0.003918644. Therefore, we fail reject the null hypothesis and conclude that the 7-predictor model is not as useful as the full (10-predictor) model.
 
-p-value is  0.003918644
-so we reject the null hypothesis, 10-predictor model more useful than 7-predictor model
-CONSTRUCT ROC curve/AUC/confusion matrix for full model -> confusion matrix at 0.5 threshold 
-performs same as 7-predictor model -> adding complexity/real world costs for no benefit in context of question 
+We found this result to be interesting, and decided to explore the full model in more depth.
 
+```{r}
+summary(full_red)
+```
+We see that the Z test scores associated with the coefficients for predictors pH and citric.acid are insignificant. The next step is to compute VIFs for each of the 10 predictos in the full model to determine if multicollinearity exists between any of the variables.
 
 ```{r}
 #check full model multicollinearity 
 vif(dplyr::select(train_red, c(alcohol,volatile.acidity,sulphates,fixed.acidity,density,residual.sugar,chlorides, pH,
                                citric.acid, total.sulfur.dioxide)))
-
-summary(full_red)
 #no multicollinearity, pH and citric.acid appear to not be significant predictors (based on 
 #wald test scores), can drop, end up with 8-predictor model
+```
+The resulting VIFs suggests that none of the variables are linearly dependent on one another, and we conclude that pH and citric.acid are not significant predictors for classifying red wine as "low" or "high" an drop them from the full model. We now have two candidate models for classifying the quality of red wine: our original 7-predictor model (model1_red) and the 8-predictor model (model2_red). We decide to test both these models using the test_red dataset in order to determine which is more useful in answering our research question. 
 
+```{r}
 #8-predictor model
 model2_red <- glm(quality_cat~alcohol+volatile.acidity+sulphates+fixed.acidity+density+residual.sugar+chlorides+
                   total.sulfur.dioxide, family = "binomial", data=train_red)
 summary(model2_red)
-#wald test, all predictors sig
 #####################################################
 ```
 
-
+First, we store the predicted probabilities of the test_red data based on our 7-predictor logistic regression model in the variable preds. We then transform this data using the prediction() function and store the values of the true positive rate and false positive rate in the roc_result object. We then use this object to generate a ROC curve for our 7-predictor logistic regression model. The ROC curve plots the true positive rate (TPR) against the false positive rate (FPR) of the model as the threshold value is varied from 0 to 1. The ROC curve generated by our 7-predictor model lies above the diagonal, which indicates the logistic regression does a better job than random guessing when classifying red wines as "low" or "high" quality. We also generate an Area Under the Curve (AUC) associated with this ROC curve. The AUC value for our model is 0.889574, which again provides evidence that our model does better at classifying red wines then random guessing (represented by an AUC score of 0.5). Finally, we produce a confusion matrix, which contains the number of observations in each class ("low" and "high" quality red wine) and the number of predicted observations in each class (for test_red) generated by our 7-predictor model using a threshold value of 0.5. 
 ```{r}
 #ROC/AUC/CONFUSION MATRIX TO COMPARE 7 AND 8-PRED MODELS 
 #####################################################
@@ -282,7 +303,7 @@ table(test_red$quality_cat, preds>0.50)
 #####################################################
 ```
 
-
+Next, we follow a similar assessment procedure using the test_red dataset and the 8-predictor model.The ROC curve generated by our 8-predictor model lies above the diagonal, which indicates the logistic regression does a better job than random guessing when classifying red wines as "low" or "high" quality.  The AUC value for this model is 0.8978096, which again provides evidence that our 8-predictor model does slightly better at classifying red wines than our 7-predictor model. Finally, we produce a confusion matrix generated by the 8-predictor model using a threshold value of 0.5. 
 ```{r}
 #####################################################
 ##ROC AND AUC FOR 8-predictor MODEL##
@@ -303,6 +324,7 @@ auc_full@y.values #0.8978096, suggests are model classify observations better th
 table(test_red$quality_cat, preds_2>0.50)
 #####################################################
 ```
+In terms of our research question, we are most interested in maximizing the ratio of the true positive results to the false positive results. The number of false positive results (low quality wines incorrectly categorized as high quality) is 6 and the number of true positive results (high quality wines correctly categorized as high quality) is 15 for our 7-predictor model, whereas the number of false positive results is 9 and the number of true positive results is 15 for our 8-predictor model. The calculated ratio of true positive results to false positive results is larger for our 7-predictor model, so we select it over the 8-predictor model.
 
 
 

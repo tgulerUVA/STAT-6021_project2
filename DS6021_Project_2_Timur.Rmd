@@ -14,149 +14,170 @@ library(corrplot)
 library(ROCR)
 ```
 
-Import data
-```{r}
-#train_combined <- read.csv("training_data.csv")
-#test_combined <- read.csv("testing_data.csv")
 
+Report:
+
+EXEC SUMMARY [TBD]
+
+Our goals: Our team took on the business challenge of the boutique wine store purchasing agent who wishes to identify high-quality red and white wines based on their physical characteristics. As a selective buyer, the agent wishes to only select the upper echelon of wines, and to minimize the number of low quality wines accidentally purchased. In addition to selecting high quality wines, the purchasing agent also wishes to learn which factors determine wine quality, and if and how these differ between white and red wines.
+
+Our team used two data sets to answer these questions. One contained physical and chemical characteristics of red wine (1599 observations), and the other contained physical and chemical characteristics of white wine (4898 observations). This wine type imbalance, while not large enough to prevent meaningful analysis, was critical to keep in mind throughout our process.
+
+Each data set contained 13 variables - an index column, a discrete 1-10 measure of quality, and the following physical/chemical characteristics of the wine:
+
+* fixed acidity
+* volatile acidity
+* citric acidity
+* residual sugar
+* chlorides
+* free sulfur dioxide
+* total sulfur dioxide
+* density
+* pH
+* sulphates
+* alcohol
+
+We removed the index column, as well as free sulfur dioxide, due to its high correlation with total sulfur dioxide in both red and white wine. Next, we performed a test-train split for both red and white wines with a fixed seed of 1, using 80% of each group for training data and the remaining 20% as testing data. Further discussions of "the data" during the EDA, model building, and model assumption validation stages will refer to the training data.
+
+One fundamental issue in our analysis was the determination of a cutoff point for "high quality" wine. Based on the distribution for both red and white wines, we picked a cutoff quality rating of 7. This encompassed 13.5% of red wines and 21.4% of white wines. The same cutoff was used for both wine types for several reasons:
+
+1. These proportions represent a level of distinction without making rarity a statistical concern
+2. No determination had been made at this stage as to whether separate models would be used for white and red wine
+3. While there was a statistically significant difference in mean quality levels (p=2.2e-16), the actual difference was not practically meaningful (5.877909 for whites vs.  5.636023 for reds).
+
+We also added the variable "color" to identify the wines, and created a combined training data set in addition to the separate red and white training sets.
+
+```{r echo=FALSE, fig.height=4, fig.width=6, message=FALSE, warning=FALSE}
+white_wine <- read.csv('wineQualityWhites.csv')
+red_wine <- read.csv('wineQualityReds.csv')
+
+white_wine <- dplyr::select(white_wine, -c(free.sulfur.dioxide, X))
+red_wine <- dplyr::select(red_wine, -c(free.sulfur.dioxide, X))
+
+red_wine <- red_wine %>%
+  mutate(color = 0) #red is 0
+white_wine <- white_wine %>%
+  mutate(color = 1) #white is 1
+
+#add quality_cat
+red_wine <- red_wine %>%
+  mutate(quality_cat = ifelse(quality>=7, 1, 0)) #high quality 1, low quality 0
+white_wine <- white_wine %>%
+  mutate(quality_cat = ifelse(quality>=7, 1, 0)) #high quality 1, low quality 0
+
+#change color to factor
+red_wine$color<-factor(red_wine$color)
+levels(red_wine$color) <- c('red') 
+white_wine$color<-factor(white_wine$color)
+levels(white_wine$color) <- c('white') 
+
+#change quality_cat to factor 
+red_wine$quality_cat<-factor(red_wine$quality_cat)
+levels(red_wine$quality_cat) <- c("low","high") 
+white_wine$quality_cat<-factor(white_wine$quality_cat)
+levels(white_wine$quality_cat) <- c("low","high") 
+
+wine_combined <- rbind(white_wine, red_wine) #combine datasets 
+
+#split into train and test data
+set.seed(1) #set seed 
+#white
+sample_white<-sample.int(nrow(white_wine), floor(.80*nrow(white_wine)), replace = F)
+train_white<-white_wine[sample_white, ] #training data 
+test_white<-white_wine[-sample_white, ] #testing data
+
+#red
+sample_red<-sample.int(nrow(red_wine), floor(.80*nrow(red_wine)), replace = F)
+train_red<-red_wine[sample_red, ] #training data 
+test_red<-red_wine[-sample_red, ] 
+
+#combined
+train_combined <- rbind(train_white, train_red)
+test_combined <- rbind(test_white, test_red) 
 
 ```
 
+```{r echo=FALSE, fig.height=4, fig.width=6, message=FALSE, warning=FALSE}
+plt1 <- ggplot(data = red_wine, aes(y=quality)) +
+  geom_histogram(fill='indianred1', color='indianred4', alpha=0.75)
+plt2 <- ggplot(data = white_wine, aes(y=quality)) +
+  geom_histogram(fill='lightgoldenrod1', color='lightgoldenrod4', alpha=0.75)
+grid.arrange(plt1, plt2, ncol=2)
 
-Look at correlation matrix
-```{r}
-corrplot(cor(train_combined[, c(-12, -13)]), method="color")
-corrplot(cor(train_red[, c(-12, -13)]), method="color")
-corrplot(cor(train_white[, c(-12, -13)]), method="color")
 ```
-Differences in correlation matrix for red and white wine suggest that multicollinear relationships will be different.
 
+Our team had several goals during the EDA process. Our first goal was to understand the relationships between variables for both red and white wines. We accomplished this by examining correlations and scatterplots.
 
-Quality vs Value for Red and White
+```{r echo=FALSE, fig.height=4, fig.width=6, message=FALSE, warning=FALSE}
+par(oma=c(0,0,2,0))
+corrplot(cor(train_red[, c(-12, -13)]), method="color", title = "Red Wine Correlations", outer=T)
+corrplot(cor(train_white[, c(-12, -13)]), method="color", title="White Wine Correlations", outer=T)
+```
+This shows us that correlations between variables differ somewhat between white and red wines, and that each type of wine has some strong relationships between variables, which we will need to consider when looking for multicollinearity (e.g. fixed acidity with pH, density, and citric acid for red wines, density with residual sugar and alcohol in white wines). Looking at these relationships in more detail with scatterplots, we see that they are fairly tight, and somewhat linear.
 
-```{r}
-ggplot(data=train_combined, aes(x=fixed.acidity, y=quality, color=color))+
-  geom_point(alpha=0.3)+
-  geom_smooth(method='lm')+
-  labs(title="Quality by Fixed Acidity and Color")
+```{r echo=FALSE, fig.height=4, fig.width=6, message=FALSE, warning=FALSE}
+pairs(train_red[, c("fixed.acidity", "pH", "density", "citric.acid", "quality")], lower.panel=NULL, main="Red Wine Scatterplots")
+pairs(train_white[, c("density", "residual.sugar", "alcohol", "quality")], lower.panel=NULL, main="White Wine Scatterplots")
+```
 
-ggplot(data=train_combined, aes(x=volatile.acidity, y=quality, color=color))+
-  geom_point(alpha=0.3)+
-  geom_smooth(method='lm')+
-  labs(title="Quality by Volatile Acidity and Color")
+In addition to a general understanding of the variables' distributions and their relationships with each other, we were specifically interested in:
 
-ggplot(data=train_combined, aes(x=citric.acid, y=quality, color=color))+
-  geom_point(alpha=0.3)+
-  geom_smooth(method='lm')+
-  labs(title="Quality by Citric Acid Acidity and Color")
+* the relationships between the physical/chemical characteristics of wine and quality 
+* whether it would be more effective to build a combined model or separate models for red and white
 
-ggplot(data=train_combined, aes(x=residual.sugar, y=quality, color=color))+
-  geom_point(alpha=0.3)+
-  geom_smooth(method='lm')+
-  labs(title="Quality by Residual Sugar and Color")
+First, we looked at scatterplots of quality vs. physical characteristic by color using best-fit regression lines, as well as boxplots of quality category vs physical characteristic by color. This led to three key takeaways:
 
-ggplot(data=train_combined, aes(x=chlorides, y=quality, color=color))+
-  geom_point(alpha=0.3)+
-  geom_smooth(method='lm')+
-  labs(title="Quality by Chlorides and Color")
+1. While several characteristics seem to have relationships with quality, a visual analysis show low "tightness of fit" for each potential predictor, meaning that it will likely take the combination of several weak predictors to yield a good prediction model
 
-ggplot(data=train_combined, aes(x=total.sulfur.dioxide, y=quality, color=color))+
-  geom_point(alpha=0.3)+
-  geom_smooth(method='lm')+
-  labs(title="Quality by Sulfur Dioxide and Color")
-
-ggplot(data=train_combined, aes(x=pH, y=quality, color=color))+
-  geom_point(alpha=0.3)+
-  geom_smooth(method='lm')+
-  labs(title="Quality by pH and Color")
-
-ggplot(data=train_combined, aes(x=sulphates, y=quality, color=color))+
-  geom_point(alpha=0.3)+
-  geom_smooth(method='lm')+
-  labs(title="Quality by Sulphates and Color")
-
+```{r echo=FALSE, fig.height=4, fig.width=6, message=FALSE, warning=FALSE}
 ggplot(data=train_combined, aes(x=alcohol, y=quality, color=color))+
   geom_point(alpha=0.3)+
   geom_smooth(method='lm')+
   labs(title="Quality by Alcohol and Color")
-
-
-
 ```
 
-Two issues at play - some variables have different slopes, some variables have wide differences in range between red and white which could cause extrapolation effect.
 
-No obvious need for transformation.
+2. Some physical characteristics (notably fixed acidity, citric acidity, chlorides, pH, sulphates) have differing effects on quality in red vs white wines
 
-Facet Wrap of categorical quality distribution for red and white for each variable
+```{r echo=FALSE, fig.height=4, fig.width=6, message=FALSE, warning=FALSE}
+ggplot(data=train_combined, aes(x=fixed.acidity, y=quality, color=color))+
+  geom_point(alpha=0.3)+
+  geom_smooth(method='lm')+
+  labs(title="Quality by Fixed Acidity and Color")
+```
 
-```{r}
-ggplot(data=train_combined, aes(x=quality_cat, y=fixed.acidity, color=color))+
-  geom_boxplot()+
-  facet_wrap(~color)+
-  labs(title="Differences in the Effect of Fixed Acidity on Quality, by Color")
 
-ggplot(data=train_combined, aes(x=quality_cat, y=volatile.acidity, color=color))+
-  geom_boxplot()+
-  facet_wrap(~color)+
-  labs(title="Differences in the Effect of Volatile Acidity on Quality, by Color")
+3. The range for some physical characteristics (notably residual sugar) is markedly different between red and white wines, leading to potential extrapolation issues if a combined model is used.
 
-ggplot(data=train_combined, aes(x=quality_cat, y=citric.acid, color=color))+
-  geom_boxplot()+
-  facet_wrap(~color)+
-  labs(title="Differences in the Effect of Citric Acid on Quality, by Color")
-
+```{r echo=FALSE, fig.height=4, fig.width=6, message=FALSE, warning=FALSE}
 ggplot(data=train_combined, aes(x=quality_cat, y=residual.sugar, color=color))+
   geom_boxplot()+
   facet_wrap(~color)+
   labs(title="Differences in the Effect of Residual Sugar on Quality, by Color")
-
-ggplot(data=train_combined, aes(x=quality_cat, y=chlorides, color=color))+
-  geom_boxplot()+
-  facet_wrap(~color)+
-  labs(title="Differences in the Effect of Chlorides on Quality, by Color")
-
-ggplot(data=train_combined, aes(x=quality_cat, y=total.sulfur.dioxide, color=color))+
-  geom_boxplot()+
-  facet_wrap(~color)+
-  labs(title="Differences in the Effect of Sulfur Dioxide on Quality, by Color")
-
-ggplot(data=train_combined, aes(x=quality_cat, y=density, color=color))+
-  geom_boxplot()+
-  facet_wrap(~color)+
-  labs(title="Differences in the Effect of Density on Quality, by Color")
-
-ggplot(data=train_combined, aes(x=quality_cat, y=pH, color=color))+
-  geom_boxplot()+
-  facet_wrap(~color)+
-  labs(title="Differences in the Effect of pH on Quality, by Color")
-
-ggplot(data=train_combined, aes(x=quality_cat, y=sulphates, color=color))+
-  geom_boxplot()+
-  facet_wrap(~color)+
-  labs(title="Differences in the Effect of Sulphates on Quality, by Color")
-
-ggplot(data=train_combined, aes(x=quality_cat, y=alcohol, color=color))+
-  geom_boxplot()+
-  facet_wrap(~color)+
-  labs(title="Differences in the Effect of Alcohol on Quality, by Color")
-
 ```
 
-most promising predictors:
-- acidity measures
-- sulphates
-- alcohol
-- chlorides (heavily affected by outliers)
-- sulfur dioxides
+Based on takeaways (2) and (3), as well as the difference in sizes between the red and white data sets, our team determined that it would be best to use two separate models for predicting high vs. low quality - one for red wines, and one for white wines.
 
 
+red wine model:
 
-```{r}
-pairs(train_red[, c(-12, -13)], lower.panel=NULL)
-pairs(train_white[, c(-12, -13)], lower.panel=NULL)
-```
+- various measures point to 7 predictor model
+- fit model and review assumptions (influential points, linearity assumption, multicollinearity)
 
+- p value of 7 predictor vs intercept only - useful
 
+- 7 more useful than full model
 
+----------------test data--------------
+- look at roc, auc
+
+- confusion matrix - show multiple thresholds, end up achieving desired business goals
+
+white wine model:
+
+repeat process
+
+------------discussion------------------
+
+relate back to research question
 

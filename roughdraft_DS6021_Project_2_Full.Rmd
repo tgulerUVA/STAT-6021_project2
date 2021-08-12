@@ -391,10 +391,7 @@ faraway::vif(dplyr::select(train_red, c(alcohol,volatile.acidity,sulphates,fixed
 #wald test scores), can drop, end up with 8-predictor model
 ```
 
-The resulting VIFs suggests that none of the variables are linearly dependent on one another, and we conclude that pH and citric.acid are not significant predictors for classifying red wine as "low" or "high" an drop them from the full model. 
-
-Although it is not necessary to test when dropping predictors due to high multicolinearity, we will run the test just to be safe.  
-To validate dropping both of these predictors from the full model, we compare our 8-predictor model to the full (10-predictor) model. 
+The resulting VIFs suggests that none of the variables are linearly dependent on one another, and we suspect that pH and citric.acid are not significant predictors for classifying red wine as "low" or "high". To validate dropping both of these predictors from the full model, we compare our 8-predictor model to the full (10-predictor) model. 
 
 The null hypothesis is:
 

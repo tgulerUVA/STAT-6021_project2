@@ -1,0 +1,670 @@
+---
+title: "Full Project"
+author: "Timur Guler"
+date: "8/10/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(ggplot2)
+library(tidyverse)
+library(gridExtra)
+library(corrplot)
+library(ROCR)
+
+# save the built-in output hook
+hook_output <- knitr::knit_hooks$get("output")
+
+# set a new output hook to truncate text output
+knitr::knit_hooks$set(output = function(x, options) {
+  if (!is.null(n <- options$out.lines)) {
+    x <- xfun::split_lines(x)
+    if (length(x) > n) {
+      # truncate the output
+      x <- c(head(x, n), "....\n")
+    }
+    x <- paste(x, collapse = "\n")
+  }
+  hook_output(x, options)
+})
+knitr::knit_hooks$set(output = hook_output)
+```
+
+
+## Executive Summary 
+
+  Our team began this project by trying to answer a single question. Is it possible to use the physical and chemical properties of red and white wine to predict whether or not the wine is high quality? We took the perspective of a team of data scientists who was hired to advise a boutique wine seller. This seller is not interested in purchasing a high volume of wine, but is very interested in ensuring that they can get the highest ratio of good wines to bad wines in every one of their purchases. This is a difficult task considering there’s far more bad wine in the world than good wine. 
+  Going into the project the team was already skeptical that we would be able to predict both red and white wine quality in one convenient model. Our limited knowledge of wine wasn’t enough for us to make this important decision right off the bat, so we needed to dig deeper. One crucial detail that we noticed is that although red and white wine share the same characteristics, during the initial exploration of the data we saw that red and white tend to have drastically different values in several of these categories. Some of these characteristics include residual sugar, fixed acidity, and chlorides. Additionally, some characteristics, like fixed acidity, affected quality differently for red and white wines. These factors indicated to our team that red and white wine deserved their own models in order to best meet our client’s needs. 
+  The model building process was an iterative one where we tried to compare several different combinations of the wine characteristics in order to most effectively predict high versus low quality wine. A combination of exploratory data analysis and model selection criteria methods led us to select an initial 7-predictor model for both red and white wines. These initial models were validated through diagnostic procedures to ensure the logistic regression assumptions were satisfied. The significance of these models was then tested against other potential models, which included the intercept-only and full-predictor models. Several candidate models were compared by generating ROC curves, AUC scores and confusion matrices using test sets to determine which model best served our research question for both red and white wines. The best model for predicting high-quality red wine that we could create, while still keeping simplicity in mind, utilized seven different characteristics as predictor variables. Some of the more important predictors include alcohol content, volatile acidity, and sulphates. When we use this model to predict high-quality red wine, it correctly classifies a wine as high-quality 71% of the time. The best model for predicting high-quality white wine ended up using five predictors to classify the wine. Some of the most important predictors for this model had some overlap with the red wine model, like alcohol and volatile acidity, but then began to differ as we added in factors like residual sugar and pH. When this model classifies a white wine as high-quality, the model is correct slightly more than 60% of the time. While this is not as strong of a result as our red wine model, this is still extremely useful to our client. 
+  While our models don’t predict high quality wines perfectly, it is an incredible supplement to human judgement alone. We recommend that our client use our model in conjunction with their years of experience with wine. We believe that marrying these two sources of information will lead to a much higher proportion of high-quality wines in stock, which in turn will lead to happy, loyal customers and less money wasted on low-quality wines. 
+  In the future, our team would love to add more characteristics to our wine datasets that aren’t limited to the wine’s physical and chemical properties. These new predictive variables could include what region the wine comes from, what season it was produced in, and age of the wine. The model that we built isn’t only useful to our current client. This information could be informative for a wine producer to see if there are ways they can tweak the wine’s characteristics in order to engineer a higher-quality wine. 
+
+**EDA**
+Our goals: Our team took on the business challenge of advising a boutique wine store who wishes to identify high-quality red and white wines based on their physical and chemical characteristics. As a selective buyer, the agent wishes to only select the upper echelon of wines, and to minimize the number of low quality wines accidentally purchased. In addition to selecting high quality wines, the purchasing agent also wishes to learn which factors determine wine quality, and if and how these differ between white and red wines.
+
+Our team used two data sets to answer these questions. One contained physical and chemical characteristics of red wine (1599 observations), and the other contained physical and chemical characteristics of white wine (4898 observations). This wine type imbalance, while not large enough to prevent meaningful analysis, was critical to keep in mind throughout our process.
+
+Each data set contained 13 variables - an index column, a discrete 1-10 measure of quality, and the following physical/chemical characteristics of the wine:
+
+* fixed acidity
+* volatile acidity
+* citric acidity
+* residual sugar
+* chlorides
+* free sulfur dioxide
+* total sulfur dioxide
+* density
+* pH
+* sulphates
+* alcohol
+
+We removed the index column, as well as free sulfur dioxide, due to its high correlation with total sulfur dioxide in both red and white wine. Next, we performed a test-train split for both red and white wines with a fixed seed of 1, using 80% of each group for training data and the remaining 20% as testing data. Further discussions of "the data" during the EDA, model building, and model assumption validation stages will refer to the training data.
+
+One fundamental issue in our analysis was the determination of a cutoff point for "high quality" wine. Based on the distribution for both red and white wines, we picked a cutoff quality rating of 7. This encompassed 13.5% of red wines and 21.4% of white wines. The same cutoff was used for both wine types for several reasons:
+
+1. These proportions represent a level of distinction without making rarity a statistical concern
+2. No determination had been made at this stage as to whether separate models would be used for white and red wine
+3. While there was a statistically significant difference in mean quality levels (p=2.2e-16), the actual difference was not practically meaningful (5.877909 for whites vs.  5.636023 for reds).
+
+We also added the variable "color" to identify the wines, and created a combined training data set in addition to the separate red and white training sets.
+
+```{r echo=FALSE, fig.height=4, fig.width=6, message=FALSE, warning=FALSE}
+white_wine <- read.csv('wineQualityWhites.csv')
+red_wine <- read.csv('wineQualityReds.csv')
+
+white_wine <- dplyr::select(white_wine, -c(free.sulfur.dioxide, X))
+red_wine <- dplyr::select(red_wine, -c(free.sulfur.dioxide, X))
+
+red_wine <- red_wine %>%
+  mutate(color = 0) #red is 0
+white_wine <- white_wine %>%
+  mutate(color = 1) #white is 1
+
+#add quality_cat
+red_wine <- red_wine %>%
+  mutate(quality_cat = ifelse(quality>=7, 1, 0)) #high quality 1, low quality 0
+white_wine <- white_wine %>%
+  mutate(quality_cat = ifelse(quality>=7, 1, 0)) #high quality 1, low quality 0
+
+#change color to factor
+red_wine$color<-factor(red_wine$color)
+levels(red_wine$color) <- c('red') 
+white_wine$color<-factor(white_wine$color)
+levels(white_wine$color) <- c('white') 
+
+#change quality_cat to factor 
+red_wine$quality_cat<-factor(red_wine$quality_cat)
+levels(red_wine$quality_cat) <- c("low","high") 
+white_wine$quality_cat<-factor(white_wine$quality_cat)
+levels(white_wine$quality_cat) <- c("low","high") 
+
+wine_combined <- rbind(white_wine, red_wine) #combine datasets 
+
+#split into train and test data
+set.seed(1) #set seed 
+#white
+sample_white<-sample.int(nrow(white_wine), floor(.80*nrow(white_wine)), replace = F)
+train_white<-white_wine[sample_white, ] #training data 
+test_white<-white_wine[-sample_white, ] #testing data
+
+#red
+sample_red<-sample.int(nrow(red_wine), floor(.80*nrow(red_wine)), replace = F)
+train_red<-red_wine[sample_red, ] #training data 
+test_red<-red_wine[-sample_red, ] 
+
+#combined
+train_combined <- rbind(train_white, train_red)
+test_combined <- rbind(test_white, test_red) 
+
+```
+
+```{r echo=FALSE, fig.height=4, fig.width=6, message=FALSE, warning=FALSE}
+plt1 <- ggplot(data = red_wine, aes(y=quality)) +
+  geom_histogram(fill='indianred1', color='indianred4', alpha=0.75)
+plt2 <- ggplot(data = white_wine, aes(y=quality)) +
+  geom_histogram(fill='lightgoldenrod1', color='lightgoldenrod4', alpha=0.75)
+grid.arrange(plt1, plt2, ncol=2)
+
+```
+
+Our team had several goals during the EDA process. Our first goal was to understand the relationships between variables for both red and white wines. We accomplished this by examining correlations and scatterplots.
+
+```{r echo=FALSE, fig.height=4, fig.width=6, message=FALSE, warning=FALSE}
+par(oma=c(0,0,2,0))
+corrplot(cor(train_red[, c(-12, -13)]), method="color", title = "Red Wine Correlations", outer=T)
+corrplot(cor(train_white[, c(-12, -13)]), method="color", title="White Wine Correlations", outer=T)
+```
+This shows us that correlations between variables differ somewhat between white and red wines, and that each type of wine has some strong relationships between variables, which we will need to consider when looking for multicollinearity (e.g. fixed acidity with pH, density, and citric acid for red wines, density with residual sugar and alcohol in white wines). Looking at these relationships in more detail with scatterplots, we see that they are fairly tight, and somewhat linear.
+
+```{r echo=FALSE, fig.height=4, fig.width=6, message=FALSE, warning=FALSE}
+pairs(train_red[, c("fixed.acidity", "pH", "density", "citric.acid", "quality")], lower.panel=NULL, main="Red Wine Scatterplots")
+pairs(train_white[, c("density", "residual.sugar", "alcohol", "quality")], lower.panel=NULL, main="White Wine Scatterplots")
+```
+
+In addition to a general understanding of the variables' distributions and their relationships with each other, we were specifically interested in:
+
+* the relationships between the physical/chemical characteristics of wine and quality 
+* whether it would be more effective to build a combined model or separate models for red and white
+
+First, we looked at scatterplots of quality vs. physical characteristic by color using best-fit regression lines, as well as boxplots of quality category vs physical characteristic by color. This led to three key takeaways:
+
+1. While several characteristics seem to have relationships with quality, a visual analysis show low "tightness of fit" for each potential predictor, meaning that it will likely take the combination of several weak predictors to yield a good prediction model
+
+```{r echo=FALSE, fig.height=4, fig.width=6, message=FALSE, warning=FALSE}
+ggplot(data=train_combined, aes(x=alcohol, y=quality, color=color))+
+  geom_point(alpha=0.3)+
+  geom_smooth(method='lm')+
+  labs(title="Quality by Alcohol and Color")
+```
+
+
+2. Some physical characteristics (notably fixed acidity, citric acidity, chlorides, pH, sulphates) have differing effects on quality in red vs white wines
+
+```{r echo=FALSE, fig.height=4, fig.width=6, message=FALSE, warning=FALSE}
+ggplot(data=train_combined, aes(x=fixed.acidity, y=quality, color=color))+
+  geom_point(alpha=0.3)+
+  geom_smooth(method='lm')+
+  labs(title="Quality by Fixed Acidity and Color")
+```
+
+
+3. The range for some physical characteristics (notably residual sugar) is markedly different between red and white wines, leading to potential extrapolation issues if a combined model is used.
+
+```{r echo=FALSE, fig.height=4, fig.width=6, message=FALSE, warning=FALSE}
+ggplot(data=train_combined, aes(x=quality_cat, y=residual.sugar, color=color))+
+  geom_boxplot()+
+  facet_wrap(~color)+
+  labs(title="Differences in the Effect of Residual Sugar on Quality, by Color")
+```
+
+Based on takeaways (2) and (3), as well as the difference in sizes between the red and white data sets, our team determined that it would be best to use two separate models for predicting high vs. low quality - one for red wines, and one for white wines.
+
+# Model Building
+
+## Red Wine Model
+```{r}
+train_red <- train_red %>% dplyr::select(-c(color, quality))
+train_white <- train_white %>% dplyr::select(-c(color, quality))
+```
+
+Our initial Exploratory Data Analysis suggests that we should build two separate models to classify the quality of red and white wines as "low" or "high". We decided to employ the all possible regressions procedure to determine which of the ten predictors may be considered the most important in predicting the quality category of red wine. All-possible-regressions is an automated procedure that goes beyond stepwise regression and tests all possible subsets of the set of potential independent variables, which in the context of our problem is 2^10 = 1024 possible subsets. We set the default value for nbest to 1, which tells the algorithm to return the one best set of predictors (based on R2) for each number of possible predictors. We also set nvmax to 10 so all possible subsets are displayed.
+
+```{r}
+allreg_red <- leaps::regsubsets(quality_cat ~., data=train_red, nbest=1, nvmax=10)
+summary(allreg_red)
+#R2
+which.max(summary(allreg_red)$adjr2)
+#model 9 is the best based on R2
+#CP
+which.min(summary(allreg_red)$cp)
+#model 8 is the best based on Mallow's CP
+#BIC
+which.min(summary(allreg_red)$bic)
+#model 7 based on BIC
+```
+
+After running the algorithm, we extract the best models based on the following criteria: Adjusted $R^{2}$, Mallows $C_p$, and BIC. For allreg_red, model 9 has the best adjusted $R^{2}$, model 8 has the best Mallow's $C_p$ and model 7 has the best BIC. In our case, the model number corresponds to the number of predictors being used. Based on these results, we select the proposed 7-predictor model for our initial model building process. The 7-predictor model uses the following predictor variables to classify the quality of red wine as "low" or "high": alcohol, volatile.acidity, sulphates, fixed.acidity, density, residual.sugar and chlorides.
+
+```{r}
+#all possible regression model, based on BIC -> 7-predictor model
+model1_red <- glm(quality_cat~ alcohol+volatile.acidity+sulphates+fixed.acidity+density+residual.sugar+chlorides, 
+                  family='binomial', data=train_red)
+summary(model1_red) #AIC score 738.12
+```
+The fitted 7-predictor logistic regression equation for red wine is displayed as follows:
+
+log(pi(quality)/1+pi(quality)) = 285.10221 + (0.72351)alcohol + (-2.82651)volatile.acidity + (3.23950)sulphates +  (0.36775)fixed.acidity + (-299.78128)density + (0.17416)residual.sugar + (-7.54886)chlorides  
+
+The Z test associated with all the coefficients are considered statistically significant at the .05 level, which suggests that all 7 predictor variables should be kept in our model. 
+
+The next step in our procedure is to check that our proposed model meets all the assumptions for logistic regressions, which are defined as follows:
+
+1) There is a linear relationship between the logit of the outcome and each predictor variables. 
+2) There are no influential values (extreme values or outliers) in the continuous predictors
+3) There are no high intercorrelations (i.e. multicollinearity) among the predictors.
+
+To determine that the first assumption has been met, we check the linear relationship between continuous predictor variables and the logit of the outcome. This is done by visually inspecting the scatter plot between each predictor variable and the logit values. 
+```{r}
+probabilities <- predict(model1_red, type = "response")
+predicted.classes <- ifelse(probabilities > 0.5, "pos", "neg")
+head(predicted.classes)
+
+model_red <- train_red%>%
+  dplyr::select(is.numeric) 
+predictors <- colnames(model_red)
+#Bind the logit and tidying the data for plot
+model_red <- model_red %>%
+  mutate(logit = log(probabilities/(1-probabilities))) %>%
+  gather(key = "predictors", value = "predictor.value", -logit)
+
+ggplot(model_red, aes(logit, predictor.value))+
+  geom_point(size = 0.5, alpha = 0.5) +
+  geom_smooth(method = "loess") + 
+  theme_bw() + 
+  facet_wrap(~predictors, scales = "free_y")
+```
+The smoothed scatter plots show that alcohol, sulphates and volatile.acidity are quite linearly associated with the quality_cat outcome in logit scale. The smoother scatter plots for the other predictor variables show little to no linear association with the quality_cat outcome in logit scale, which leads us to believe they are weaker predictors. None of the scatterplots lead us to believe that assumption 1 has been violated, and we therefore move on without transforming variables and begin to explore our next assumption. 
+
+Next, we generate the residuals, studentized residuals and externally studentized residuals associated with our 7-predictor model to help detect any outliers. We combine these residual values into a dataframe and create scatterplots of the studentized and externally studentized residuals in order to visually inspect for the presence of outliers.
+```{r}
+#ASSUMPTION 2 -> outliers and inluential variables 
+#residuals -> used to help detect outliers 
+res<-model1_red$residuals
+# studentized residuals 
+student.res<-rstandard(model1_red)
+# externally studentized residuals
+ext.student.res<-rstudent(model1_red)
+
+res.frame<-data.frame(res,student.res,ext.student.res)
+
+par(mfrow=c(1,2))
+plot(model1_red$fitted.values,student.res,
+     main="Studentized Residuals",
+     ylim=c(-4.5,4.5))
+plot(model1_red$fitted.values,ext.student.res,
+     main="Externally Studentized Residuals",
+     ylim=c(-4.5,4.5))
+#plots look very similar, suggests that there are no outliers 
+```
+The resulting plots look very similar, which leads us to believe there are no outliers in our model. 
+
+Next, we calculate leverages to identify how far each observation is from the center of the predictor space. If the leverage is greater than 2p/n, the associated observation may be deemed to have high leverage and is considered outlying in the predictor space. In this case p, which corresponds to the number of predictor variables in our model, is 7 and n, the number of records in our training set for red wine, is 1279. 
+```{r, out.lines=5} 
+#leverage
+p <- 7 #7 predictor model
+n<-dim(train_red)[1]
+lev<-lm.influence(model1_red)$hat 
+##identify high leverage points 
+#(lev[lev>2*p/n])
+#high leverage observations are data points that are likely to be influential 
+```
+
+Due to the number of observations that were found to have high leverage, we decided to calculate Cook's Distance in order to determine if these high leverage observations were influential and were consequently negatively affecting our regression model. We decided to use Cook's distance measure as we are mainly concerned with the predictive ability of our logistic model. A large value indicates that the observation has a large influence on the results. The Cook's Distance of each observation was compared to the a cut off value generated by the following F distribution: F0.5,p,n-p, where p is 7 and n is 1279.
+
+```{r}
+#influential 
+#cooks distance
+COOKS<-cooks.distance(model1_red)
+COOKS[COOKS>qf(0.5,p,n-p)]
+#no influential points based on COOK's distance
+```
+
+None of the generated Cook's distance values exceeded the cutoff value, which leads us to believe that none of our observations in our model are influential. We conclude that assumption 2 has been met, and move on to the final assumption.
+
+Next, we check for multicollinearity in our model. Multicollinearity corresponds to a situation where two or more predictors are linearly dependent on each other. When two or more predictors are linearly dependent, they do not provide independent information to the response, resulting in large standard errors for the coefficients. We can check for multicollinearity by computing the variance inflation factors (VIFs) for each predictor variable. As a rule of thumb, A VIF value that exceeds 5 indicates a problematic amount of collinearity and needs to be explored, whereas a value greater than 10 indicates a serious amount of collinearity and must be immediately addressed. 
+
+```{r}
+#ASSUMPTION 3
+#mutlicollinearity 
+faraway::vif(dplyr::select(train_red, c(alcohol,volatile.acidity,sulphates,fixed.acidity,density,residual.sugar,chlorides)))
+#VIF score above 10 indicates high correlation, cause for concern, VIF scores less than 10 across the board
+#############################################################
+```
+The resulting VIFs are below 5 for all 7 of the predictor variables in our model, which leads us to conclude that the third assumption has been satisfied. 
+
+After checking that all the model assumptions have been met, we move on to comparing our 7-predictor model with other possible logistic regression models using Likelihood Ratio Tests (LRTs) to evaluate if our proposed model is useful in classifying red wine as either "low" or "high" quality (quality_cat). 
+
+First, we compare our 7-predictor model to the intercept only model. 
+
+The null hypothesis is:
+
+Ho:beta(alcohol)=beta(volatile.acidity)=beta3(sulphates)=beta4(fixed.acidity)=beta5(density)=beta6(residual.sugar)=
+beta7(chlorides)=0 
+
+versus the alternative hypothesis:
+
+Ha:at least one of the coefficients is not zero. 
+
+We calculate the test statistic, which measures the difference in loglikelihoods of the models we are comparing, and compare it with a chi square distribution, where the degrees of freedom equal the number of coefficients we are testing (7). For this comparison, the test statistic is the difference in the null deviance and residual deviance of the 7-predictor model.
+```{r}
+#TESTING MODEL 7-PRED MODEL
+#############################################################
+#Test that 7-predictor model is useful
+##test if coefficients for all 7 predictors are 0 
+#H0: beta1=beta2=beta3=beta4=beta5=beta6=beta7=0
+#HA: at least one of the coefficients in HO is not zero
+##test stat
+TS<-model1_red$null.deviance-model1_red$deviance
+TS
+#p-value 
+1-pchisq(TS,7)
+#p-value is 0
+#So we reject the null hypothesis. The 7-predictor model is chosen over the intercept-only model;
+#the 7-predictor model is useful.
+```
+The generated test statistic is 291.5332 with an associated p-value of 0. Therefore, we reject the null hypothesis and conclude that our 7-predictor model is useful and should be selected over the intercept-only model.
+
+Next, we decide to compare our 7-predictor model to the full (10-predictor) model. 
+
+The null hypothesis is:
+
+Ho:beta(pH)=beta(citric.acid)=beta(total.sulfur.dioxide)=0
+
+versus the alternative hypothesis: 
+
+Ha:at least one of the coefficients is not zero. 
+
+Again we calculate the test statistic, and compare it with a chi square distribution with 3 degrees of freedom (as we are testing 3 coefficients). For this comparison, the test statistic is the difference in the residual deviances of both models.
+```{r}
+#test if 7-predictor model more useful then full (10 predictor model)
+#H0: beta8=beta9=beta10=0
+#HA: at least one of the coefficients in HO is not zero
+full_red<-glm(quality_cat ~ ., family = "binomial", data=train_red)
+
+TS2<-model1_red$deviance-full_red$deviance
+TS2  #13.3604
+#pvalue
+1-pchisq(TS2,3) #0.003918644
+```
+The generated test statistic is 13.3604 with an associated p-value of 0.003918644. Therefore, we reject the null hypothesis and conclude that the full (10-predictor) model is more useful than the 7-predictor model.
+
+We found this result to be interesting, and decided to explore the full model in more depth.
+
+```{r}
+summary(full_red)
+```
+We see that the Z test scores associated with the coefficients for predictors pH and citric.acid are insignificant. The next step is to compute VIFs for each of the 10 predictors in the full model to determine if multicollinearity exists between any of the variables.
+
+```{r}
+#check full model multicollinearity 
+faraway::vif(dplyr::select(train_red, c(alcohol,volatile.acidity,sulphates,fixed.acidity,density,residual.sugar,chlorides, pH,
+                               citric.acid, total.sulfur.dioxide)))
+#no multicollinearity, pH and citric.acid appear to not be significant predictors (based on 
+#wald test scores), can drop, end up with 8-predictor model
+```
+The resulting VIFs suggests that none of the variables are linearly dependent on one another, and we conclude that pH and citric.acid are not significant predictors for classifying red wine as "low" or "high" an drop them from the full model. 
+
+To validate dropping both of these predictors from the full model, we compare our 8-predictor model to the full (10-predictor) model. 
+
+The null hypothesis is:
+
+Ho:beta(pH)=beta(citric.acid)=0
+
+versus the alternative hypothesis: 
+
+Ha: at least one of the coefficients is not zero. 
+
+Again we calculate the test statistic, and compare it with a chi square distribution with 2 degrees of freedom (as we are testing 2 coefficients). 
+```{r}
+#8-predictor model
+model2_red <- glm(quality_cat~alcohol+volatile.acidity+sulphates+fixed.acidity+density+residual.sugar+chlorides+
+                  total.sulfur.dioxide, family = "binomial", data=train_red)
+summary(model2_red)
+
+#H0: beta(pH)=beta(citric.acid)
+#Ha: at least one of the coefficients in H0 is non-zero
+
+TS3<-model2_red$deviance-full_red$deviance
+TS3
+1-pchisq(TS3,2) #p-value: 0.5319783
+```
+The generated test statistic is 1.262305 with an associated p-value of 0.5319783. Therefore, we fail to reject the null hypothesis and select the 8-predictor model over the full model.
+
+The fitted 8-predictor logistic regression equation for red wine is displayed as follows:
+
+log(pi(quality)/1+pi(quality)) = 316.5 + (0.6657)alcohol + (-2.720)volatile.acidity + (3.739)sulphates +  (0.3373)fixed.acidity + (-330.4)density + (0.2517)residual.sugar + (-8.472)chlorides + (-0.01188)total.sulfur.dioxide
+
+We now have two candidate models for classifying the quality of red wine: our original 7-predictor model (model1_red) and the 8-predictor model (model2_red). We decide to test both these models using the test_red dataset in order to determine which is more useful in answering our research question. 
+
+First, we store the predicted probabilities of the test_red data based on our 7-predictor logistic regression model in the variable preds. We then transform this data using the prediction() function and store the values of the true positive rate and false positive rate in the roc_result object. We then use this object to generate a ROC curve for our 7-predictor logistic regression model. The ROC curve plots the true positive rate (TPR) against the false positive rate (FPR) of the model as the threshold value is varied from 0 to 1. The ROC curve generated by our 7-predictor model lies above the diagonal, which indicates the logistic regression does a better job than random guessing when classifying red wines as "low" or "high" quality. We also generate an Area Under the Curve (AUC) associated with this ROC curve. The AUC value for our model is 0.889574, which again provides evidence that our model does better at classifying red wines then random guessing (represented by an AUC score of 0.5). Finally, we produce a confusion matrix, which contains the number of observations in each class ("low" and "high" quality red wine) and the number of predicted observations in each class (for test_red) generated by our 7-predictor model using a threshold value of 0.5. 
+```{r}
+#ROC/AUC/CONFUSION MATRIX TO COMPARE 7 AND 8-PRED MODELS 
+#####################################################
+##ROC AND AUC FOR 7-PREDICTOR MODEL##
+##predicted survival rate for test data based on training data
+preds<-predict(model1_red, newdata=test_red, type="response")
+##transform the input data into a format that is suited for the
+##performance() function
+rates<-prediction(preds, test_red$quality_cat, label.ordering = c("low", "high"))
+##store the true positive and false positive rates
+roc_result<-performance(rates,measure="tpr", x.measure="fpr")
+
+##plot ROC curve and overlay the diagonal line for random guessing
+plot(roc_result, main="ROC Curve for Red Wine Quality Prediction")
+lines(x = c(0,1), y = c(0,1), col="red")
+
+auc<-performance(rates, measure = "auc")
+auc@y.values #0.8896574, suggests are model classify observations better than random guessing 
+
+table(test_red$quality_cat, preds>0.50)
+#####################################################
+```
+
+Next, we follow a similar assessment procedure using the test_red dataset and the 8-predictor model.The ROC curve generated by our 8-predictor model lies above the diagonal, which indicates the logistic regression does a better job than random guessing when classifying red wines as "low" or "high" quality.  The AUC value for this model is 0.8978096, which again provides evidence that our 8-predictor model does slightly better at classifying red wines than our 7-predictor model. Finally, we produce a confusion matrix generated by the 8-predictor model using a threshold value of 0.5. 
+```{r}
+#####################################################
+##ROC AND AUC FOR 8-predictor MODEL##
+preds_2<-predict(model2_red, newdata=test_red, type="response")
+##transform the input data into a format that is suited for the
+##performance() function
+rates_2<-prediction(preds_2, test_red$quality_cat, label.ordering = c("low", "high"))
+##store the true positive and false positive rates
+roc_result_2<-performance(rates_2,measure="tpr", x.measure="fpr")
+
+##plot ROC curve and overlay the diagonal line for random guessing
+plot(roc_result_2, main="ROC Curve for Red Wine Quality Prediction")
+lines(x = c(0,1), y = c(0,1), col="red")
+
+auc_full<-performance(rates_2, measure = "auc")
+auc_full@y.values #0.8978096, suggests are model classify observations better than random guessing 
+
+table(test_red$quality_cat, preds_2>0.50)
+#####################################################
+```
+In terms of our research question, we are most interested in maximizing the ratio of the true positive results to the false positive results. The number of false positive results (low quality wines incorrectly categorized as high quality) is 6 and the number of true positive results (high quality wines correctly categorized as high quality) is 15 for our 7-predictor model, whereas the number of false positive results is 9 and the number of true positive results is 15 for our 8-predictor model. The calculated ratio of true positive results to false positive results is larger for our 7-predictor model, at .714, so we select it over the 8-predictor model, at .625. 
+
+
+## White Wine Model  
+
+
+### Overview  
+
+Our goal, like with red wines, is to select a model which maximizes the ratio of true positives to false positives.  
+The model selection process for white wine was by no means straightforward. We began with a 7 predictor model, then moved to the full model, and finally settled upon a 5 predictor model which both outperformed either of the previous models, contained fewer predictors, and contained no serious multicolinearity.  
+
+60 percent of the wines selected by this final model are truly high quality, which is far higher than the 22 percent that random guessing selects.
+
+### Searching all First Order Models
+
+We begin by seeing what the BIC, Mallows $C_p$, and adjusted $R^{2}$ select as their best model from all possible models.  
+
+```{r}
+allreg_white <- leaps::regsubsets(quality_cat ~., data=train_white, nbest=1, nvmax=10)
+summary(allreg_white)
+```
+
+```{r}
+which.min(summary(allreg_white)$bic)
+which.min(summary(allreg_white)$cp)
+which.max(summary(allreg_white)$adjr2)
+```
+
+All the criteria have selected the 7th model as their best, so we will fit that model as our initial model and assess it.  
+
+```{r}
+model7_white <- glm(quality_cat ~ fixed.acidity + volatile.acidity + residual.sugar + density + pH + sulphates + alcohol,
+                    family='binomial', data=train_white)
+summary(model7_white)
+```
+
+Alcohol fails the wald test. This is counter intuitive, since alcohol has the highest correlation with quality.  
+Alcohol in white wines is also highly correlated with both density and residual sugar, so there is likely multicolinearity present in the model. Before addressing this, we should test whether this model is even better than the intercept, and then test if it is better than the model with all predictors.  
+
+### Is the 7 predictor model better than the intercept only model?  
+
+Our hypothesis here are $H_{0} : \beta_{1} = \beta_{2} = \ldots = \beta_{7}, H_{a} : \exists x \in \{1, 2, \ldots , 7\} s.t. \beta_{x} \neq 0$  
+
+```{r}
+TS<-model7_white$null.deviance-model7_white$deviance
+TS
+#p-value 
+1-pchisq(TS,6)
+```
+
+The code has produced a chi squared test statistic of 757.2668, and a corresponding p-value of $\approx 0$.  
+Therefore we reject $H_{0}$ and conclude that at least one of our predictors is linearly related to the log odds of our quality category variable.  
+
+### Is the 10 predictor model better than the 7 predictor model?  
+
+Our hypothesis are $H_{0} : \beta_{8} = \beta_{9} = \beta_{10}, H_{a} : \exists x \in \{8, 9, 10\} s.t. \beta_{x} \neq 0$  
+
+```{r}
+full_white<-glm(quality_cat ~ ., family = "binomial", data=train_white)
+summary(full_white)
+
+TS2<-model7_white$deviance-full_white$deviance
+TS2  #1.502435
+#pvalue
+1-pchisq(TS2,3)
+```
+
+We get a chi squared test statistic of 15.15094 and a corresponding p-value of $\approx 0.001$.  
+Therefore, we reject the null hypothesis and conclude that at least one predictor is significant.  
+This means that we prefer the full model over the six predictor model, and will add in the rest of the predictors.  
+
+The full model has wald tests that fail. Many of the predictors are highly correlated with one another, so we must address multicolinearity.  
+
+### Multicollinearity  
+
+Before moving forward, we should check to see if unacceptable levels of multicolinearity are in the full model.  
+
+```{r}
+faraway::vif(dplyr::select(train_white, -quality_cat))
+```
+
+```{r}
+model8_white <- glm(quality_cat ~ fixed.acidity + volatile.acidity + citric.acid + chlorides + total.sulfur.dioxide + pH + sulphates                                 + alcohol,
+                    family='binomial', data=train_white)
+summary(model8_white)
+```
+
+Both residual sugar and density have a VIF higher than 10, meaning that multicolinearity is present, so we should take them out of the model.  
+
+```{r}
+faraway::vif(dplyr::select(train_white, c(fixed.acidity, volatile.acidity, citric.acid, chlorides, total.sulfur.dioxide, pH, sulphates, alcohol)))
+```
+
+While we no longer have any multicolinearity, fixed acidity, citric acid, and total sulfur dioxide fail their wald test, so we need to test if we can remove them from the model as well.  
+
+```{r}
+model5_white <- glm(quality_cat ~ volatile.acidity + chlorides + pH + sulphates + alcohol,
+                    family='binomial', data=train_white)
+summary(model5_white)
+```
+
+Our hypothesis are $H_{0} : \beta_{6} = \beta_{7} = \beta_{8} , H_{a} : \exists x \in \{6, 7, 8\} s.t. \beta_{x} \neq 0$.  
+
+```{r echo=FALSE}
+TS2<-model5_white$deviance-model8_white$deviance
+TS2  #1.502435
+#pvalue
+1-pchisq(TS2, 3)
+```
+
+Our $\chi^{2}$ test statistic is 3.95 and has a corresponding p value of 0.27.  
+
+Our test fails to reject, so we may remove these three variables and continue with the 5 predictor model.  
+
+```{r}
+##predicted survival rate for test data based on training data
+preds<-predict(model5_white, newdata=test_white, type="response")
+##transform the input data into a format that is suited for the
+##performance() function
+rates<-prediction(preds, test_white$quality_cat, label.ordering = c("low", "high"))
+##store the true positive and false positive rates
+roc_result<-performance(rates,measure="tpr", x.measure="fpr")
+
+
+##plot ROC curve and overlay the diagonal line for random guessing
+plot(roc_result, main="ROC Curve for White Wine Quality Prediction")
+lines(x = c(0,1), y = c(0,1), col="red")
+
+auc<-performance(rates, measure = "auc")
+auc@y.values
+```
+
+Now that we've arrived at this model, we can create an ROC curve for it. This ROC curve has an area of 0.77, which, while it doesn't always translate to a good prediction in our case, it does suggest this model predicts well.  
+
+
+```{r}
+preds_7<-predict(model7_white, newdata=test_white, type="response")
+table(test_white$quality_cat, preds_7>0.5)
+
+preds_full<-predict(full_white, newdata=test_white, type="response")
+table(test_white$quality_cat, preds_full>0.5)
+
+preds_8<-predict(model8_white, newdata=test_white, type="response")
+table(test_white$quality_cat, preds_8>0.5)
+
+preds_5<-predict(model5_white, newdata=test_white, type="response")
+table(test_white$quality_cat, preds_5>0.5)
+```
+
+The initial model on 7 predictors has a true positive probability of $\frac{64}{64+43} \approx 0.598$  
+The full model has a true positive probability of $\frac{63}{63+42} = 0.6$  
+The model on 8 predictors has a true positive probability of $\frac{55}{55+36} \approx 0.604$  
+Finally, the model on 5 predictors has a true positive probability of $\frac{56}{56+37} \approx 0.602$  
+
+Overall, the best model is clearly the five predictor model, which achieves the nearly identical accuracy as the previous models, contains the fewest predictors, and has no multicolinearity.  
+
+## Outliers or Transformations
+
+Finally, we need to assess the rest of the regression assumptions.  
+
+```{r}
+probabilities <- predict(model5_white, type = "response")
+predicted.classes <- ifelse(probabilities > 0.5, "pos", "neg")
+head(predicted.classes)
+
+#ASSUMPTION 1) Linearity assumption
+# Select only numeric predictors
+model_white <- train_white%>%
+  dplyr::select(is.numeric) 
+predictors <- colnames(model_white)
+#Bind the logit and tidying the data for plot
+model_white <- model_white %>%
+  mutate(logit = log(probabilities/(1-probabilities))) %>%
+  gather(key = "predictors", value = "predictor.value", -logit)
+
+ggplot(model_white, aes(logit, predictor.value))+
+  geom_point(size = 0.5, alpha = 0.5) +
+  geom_smooth(method = "loess") + 
+  theme_bw() + 
+  facet_wrap(~predictors, scales = "free_y")
+```
+
+None of these scatterplots show any of the predictors are clearly nonlinear, so there is no need to do any transformations.  
+
+```{r}
+res<-model5_white$residuals
+#studentized residuals 
+student.res<-rstandard(model5_white)
+#externally studentized residuals
+ext.student.res<-rstudent(model5_white)
+
+res.frame<-data.frame(res,student.res,ext.student.res)
+
+par(mfrow=c(1,2))
+plot(model5_white$fitted.values,student.res,
+     main="Studentized Residuals",
+     ylim=c(-4.5,4.5))
+plot(model5_white$fitted.values,ext.student.res,
+     main="Externally Studentized Residuals",
+     ylim=c(-4.5,4.5))
+
+```
+
+According to these plots, there doesn't seem to be any outliers in the residuals.
+
+
+
+## Conclusion
+
+We began this project with one goal in mind. We wanted to see if we can predict what wine is high-quality simply using the physical and chemical characteristics of the wine. This knowledge would be extremely valuable to our client on their hunt to maximize the ratio of high-quality wines to low-quality wines that they buy. 
+
+After extensive exploratory data analysis, we were able to determine that the best course of action was to create a separate model for both red and white wine due to the fact that many wine characteristics had a substantial difference in their effects on quality depending on the color of the wine, as well as the fact that some of the characteristics had completely different ranges in values across colors. 
+
+The process to create both of these models was challenging and took the team down many twists and turns to arrive to the final models. For the white wine model, we used 5 predictors. This model was able to perform on par with several more complicated models, while utilizing fewer predictors.Ultimately, for the wines that our model predicts as high-quality, 60 percent of these wines are actually high-quality. For the red wine model, we used 7 predictors. This model differed in several of the characteristics used by our white wine model and actually did a better job at predicting high-quality reds than our white wine model was able to predict high-quality whites. When this model classifies a wine as high-quality, 71.4% of the wines are actually of high-quality. 
+
+While this is not entirely perfect in their ability to predict, these models could act as an incredible supplement to our client's already stellar knowledge of wine. At the very least, this is a powerful sanity check. At its very best, this model can alleviate much of the stress on human judgement and ultimately lead to cost savings on low-quality wine and substantially happier customers. 

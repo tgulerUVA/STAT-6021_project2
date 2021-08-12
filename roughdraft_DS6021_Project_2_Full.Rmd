@@ -641,6 +641,9 @@ Finally, the model on 5 predictors has a true positive probability of $\frac{56}
 
 Overall, the best model is clearly the five predictor model, which achieves the nearly identical accuracy as the previous models, contains the fewest predictors, and has no multicolinearity.  
 
+The final model's equation is:  
+$\log{\big(\frac{\hat\pi_{quality\_cat}}{1 - \hat\pi_{quality\_cat}}\big)} = -11.30223 - 3.3808*x_{volatile.acidity} - 18.68852*x_{chlorides} + 0.89333*x_{pH} + 1.10611*x_{sulphates} + 0.76496*x_{alcohol}$
+
 ## Outliers or Transformations
 
 Finally, we need to assess the rest of the regression assumptions.  

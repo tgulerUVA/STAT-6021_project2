@@ -205,9 +205,8 @@ summary(model1_red) #AIC score 738.12
 ```
 The fitted 7-predictor logistic regression equation for red wine is displayed as follows:
 
-log(pi(quality)/1+pi(quality)) = 285.10221 + (0.72351)alcohol + (-2.82651)volatile.acidity + (3.23950)sulphates +  (0.36775)fixed.acidity + (-299.78128)density + (0.17416)residual.sugar + (-7.54886)chlorides  
-
-$\log{\big(\frac{\hat\pi_{quality\_cat}}{1 - \hat\pi_{quality\_cat}}\big)} = 285.10221 + 0.72351*x_{alcohol} - 2.82651*x_{volatile.acidity} + 3.23950*x_{sulphates} +  (0.36775)x_{fixed.acidity} - 299.78128*x_{density} + 0.17416*x_{residual.sugar} - 7.54886*x_{chlorides}$
+[comment]: <> (log(pi(quality)/1+pi(quality)) = 285.10221 + (0.72351)alcohol + (-2.82651)volatile.acidity + (3.23950)sulphates +  (0.36775)fixed.acidity + (-299.78128)density + (0.17416)residual.sugar + (-7.54886)chlorides)  
+$\log{\big(\frac{\hat\pi_{quality\_cat}}{1 - \hat\pi_{quality\_cat}}\big)} = 285.10221 + 0.72351*x_{alcohol} - 2.82651*x_{volatile.acidity} + 3.23950*x_{sulphates} +  0.36775*x_{fixed.acidity} - 299.78128*x_{density} + 0.17416*x_{residual.sugar} - 7.54886*x_{chlorides}$
 
 The Z test associated with all the coefficients are considered statistically significant at the .05 level, which suggests that all 7 predictor variables should be kept in our model. 
 

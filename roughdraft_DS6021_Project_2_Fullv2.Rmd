@@ -413,7 +413,7 @@ The generated test statistic is 1.262305 with an associated p-value of 0.5319783
 
 The fitted 8-predictor logistic regression equation for red wine is displayed as follows:
 
-[comment]: <> (log(pi(quality)/1+pi(quality)) = 316.5 + (0.6657)alcohol + (-2.720)volatile.acidity + (3.739)sulphates +  (0.3373)fixed.acidity + (-330.4)density + (0.2517)residual.sugar + (-8.472)chlorides + (-0.01188)total.sulfur.dioxide)) 
+[comment]: <> (log(pi(quality)/1+pi(quality)) = 316.5 + (0.6657)alcohol + (-2.720)volatile.acidity + (3.739)sulphates +  (0.3373)fixed.acidity + (-330.4)density + (0.2517)residual.sugar + (-8.472)chlorides + (-0.01188)total.sulfur.dioxide) 
 $\log{\big(\frac{\hat\pi_{quality\_cat}}{1 - \hat\pi_{quality\_cat}}\big)} = 316.5 + 0.6657*x_{alcohol} - 2.720*x_{volatile.acidity} + 3.739*x_{sulphates} +  0.3373*x_{fixed.acidity} - 330.4*x_{density} + 0.2517*x_{residual.sugar} - 8.472*x_{chlorides} - 0.01188*x_{total.sulfur.dioxide}$
 
 We now have two candidate models for classifying the quality of red wine: our original 7-predictor model (model1_red) and the 8-predictor model (model2_red). We decide to test both these models using the test_red dataset in order to determine which is more useful in answering our research question. 

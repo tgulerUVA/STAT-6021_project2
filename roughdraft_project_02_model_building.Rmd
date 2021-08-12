@@ -78,7 +78,7 @@ train_white <- train_white %>% dplyr::select(-c(color, quality))
 Our initial Exploratory Data Analysis suggests that we should build two separate models to classify the quality of red and white wines as "low" or "high". We decided to employ the all possible regressions procedure to determine which of the ten predictors may be considered the most important in predicting the quality category of red wine. All-possible-regressions is an automated procedure that goes beyond stepwise regression and tests all possible subsets of the set of potential independent variables, which in the context of our problem is 2^10 = 1024 possible subsets. We set the default value for nbest to 1, which tells the algorithm to return the one best set of predictors (based on R2) for each number of possible predictors. We also set nvmax to 10 so all possible subsets are displayed.
 
 ```{r}
-allreg_red <- regsubsets(quality_cat ~., data=train_red, nbest=1, nvmax=10)
+allreg_red <- leaps::regsubsets(quality_cat ~., data=train_red, nbest=1, nvmax=10)
 summary(allreg_red)
 #R2
 which.max(summary(allreg_red)$adjr2)
@@ -196,7 +196,7 @@ Next, we check for multicollinearity in our model. Multicollinearity corresponds
 ```{r}
 #ASSUMPTION 3
 #mutlicollinearity 
-vif(dplyr::select(train_red, c(alcohol,volatile.acidity,sulphates,fixed.acidity,density,residual.sugar,chlorides)))
+faraway::vif(dplyr::select(train_red, c(alcohol,volatile.acidity,sulphates,fixed.acidity,density,residual.sugar,chlorides)))
 #VIF score above 10 indicates high correlation, cause for concern, VIF scores less than 10 across the board
 #############################################################
 ```
@@ -267,7 +267,7 @@ We see that the Z test scores associated with the coefficients for predictors pH
 
 ```{r}
 #check full model multicollinearity 
-vif(dplyr::select(train_red, c(alcohol,volatile.acidity,sulphates,fixed.acidity,density,residual.sugar,chlorides, pH,
+faraway::vif(dplyr::select(train_red, c(alcohol,volatile.acidity,sulphates,fixed.acidity,density,residual.sugar,chlorides, pH,
                                citric.acid, total.sulfur.dioxide)))
 #no multicollinearity, pH and citric.acid appear to not be significant predictors (based on 
 #wald test scores), can drop, end up with 8-predictor model
@@ -414,7 +414,7 @@ The model selection process for white wine was by no means straightforward. We b
 We begin by seeing what the BIC, Mallows $C_p$, and adjusted $R^{2}$ select as their best model from all possible models.  
 
 ```{r}
-allreg_white <- regsubsets(quality_cat ~., data=train_white, nbest=1, nvmax=10)
+allreg_white <- leaps::regsubsets(quality_cat ~., data=train_white, nbest=1, nvmax=10)
 summary(allreg_white)
 ```
 
@@ -497,15 +497,16 @@ model5_white <- glm(quality_cat ~ volatile.acidity + chlorides + pH + sulphates 
 summary(model5_white)
 ```
 
-```{r echo=FALSE, results='hide'}
-full_white<-glm(quality_cat ~ ., family = "binomial", data=train_white)
-summary(full_white)
+Our hypothesis are $H_{0} : \beta_{6} = \beta_{7} = \beta_{8} , H_{a} : \exists x \in \{6, 7, 8\} s.t. \beta_{x} \neq 0$.  
 
+```{r echo=FALSE}
 TS2<-model5_white$deviance-model8_white$deviance
 TS2  #1.502435
 #pvalue
 1-pchisq(TS2, 3)
 ```
+
+Our $\chi^{2}$ test statistic is 3.95 and has a corresponding p value of 0.27.  
 
 Our test fails to reject, so we may remove these three variables and continue with the 5 predictor model.  
 

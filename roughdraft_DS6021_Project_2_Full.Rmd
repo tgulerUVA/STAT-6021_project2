@@ -489,13 +489,13 @@ In terms of our research question, we are most interested in maximizing the rati
 ## Model Building 
 
 Our goal, like with red wines, is to select a model which maximizes the ratio of true positives to false positives.  
-The model selection process for white wine was by no means straightforward. We began with a 7 predictor model, then moved to the full model, and finally settled upon a 5 predictor model which both outperformed either of the previous models, contained fewer predictors, and contained no serious multicolinearity.  
+The model selection process for white wine was by no means straightforward. We began with a 7 predictor model, then moved to the full model, then to an 8 predictor model, and finally settled upon a 5 predictor model which performed nearly identically to any of the previous models, contained fewer predictors, and contained no serious multicolinearity.  
 
-60 percent of the wines selected by this final model are truly high quality, which is far higher than the 22 percent that random guessing selects.
+60 percent of the wines selected by this final model are truly high quality, which is far higher than the 22 percent that would be average if we were randomly selecting white wines.  
 
 ## Searching all First Order Models
 
-We begin by seeing what the BIC, Mallows $C_p$, and adjusted $R^{2}$ select as their best model from all possible models.  
+As in the previous section, we begin by seeing what the BIC, Mallows $C_p$, and adjusted $R^{2}$ select as their best model from all the predictors.  
 
 ```{r}
 allreg_white <- leaps::regsubsets(quality_cat ~., data=train_white, nbest=1, nvmax=10)
@@ -503,12 +503,13 @@ summary(allreg_white)
 ```
 
 ```{r}
-which.min(summary(allreg_white)$bic)
-which.min(summary(allreg_white)$cp)
-which.max(summary(allreg_white)$adjr2)
+metrics <- data.frame(c('BIC', 'Mallows CP', 'Adjusted R squared'), 
+           c(which.min(summary(allreg_white)$bic), which.min(summary(allreg_white)$cp), which.max(summary(allreg_white)$adjr2)))
+colnames(metrics) <- c('Critera', 'Number of predictors selected')
+metrics
 ```
 
-All the criteria have selected the 7th model as their best, so we will fit that model as our initial model and assess it.  
+All the criteria have selected the 7 predictor model as their best, so we will fit that model as our initial model and assess it.  
 
 ```{r}
 model7_white <- glm(quality_cat ~ fixed.acidity + volatile.acidity + residual.sugar + density + pH + sulphates + alcohol,
@@ -517,7 +518,7 @@ summary(model7_white)
 ```
 
 Alcohol fails the wald test. This is counter intuitive, since alcohol has the highest correlation with quality.  
-Alcohol in white wines is also highly correlated with both density and residual sugar, so there is likely multicolinearity present in the model. Before addressing this, we should test whether this model is even better than the intercept, and then test if it is better than the model with all predictors.  
+Alcohol in white wines is highly correlated with both density and residual sugar as well, so multicolinearity is expected to be present in this model. Therefore, it is likely that alcohol is truly a good predictor, but multicolinearity is causing it to fail the wald test. Before addressing this issue, we should test whether this model is better than the intercept, and better than the model with all predictors.  
 
 ## Is the 7 predictor model better than the intercept only model?  
 
@@ -530,7 +531,7 @@ TS
 1-pchisq(TS,6)
 ```
 
-The code has produced a chi squared test statistic of 757.2668, and a corresponding p-value of $\approx 0$.  
+The code has produced a $\chi^{2}$ test statistic of 757.2668, and a corresponding p-value of $\approx 0$.  
 Therefore we reject $H_{0}$ and conclude that at least one of our predictors is linearly related to the log odds of our quality category variable.  
 
 ## Is the 10 predictor model better than the 7 predictor model?  
@@ -547,27 +548,25 @@ TS2  #1.502435
 1-pchisq(TS2,3)
 ```
 
-We get a chi squared test statistic of 15.15094 and a corresponding p-value of $\approx 0.001$.  
+We get a $\chi^{2}$ test statistic of 15.15094 and a corresponding p-value of $\approx 0.001$.  
 Therefore, we reject the null hypothesis and conclude that at least one predictor is significant.  
-This means that we prefer the full model over the six predictor model, and will add in the rest of the predictors.  
+This means that we prefer the full model over the seven predictor model, and should add in the rest of the predictors.  
 
-The full model has wald tests that fail. Many of the predictors are highly correlated with one another, so we must address multicolinearity.  
+The output shows that the full model has wald tests that fail, and from earlier correlation plots we know that many of the predictors are highly correlated with one another, so we must assess and fix multicolinearity.  
 
 ## Multicollinearity  
-
-Before moving forward, we should check to see if unacceptable levels of multicolinearity are in the full model.  
 
 ```{r}
 faraway::vif(dplyr::select(train_white, -quality_cat))
 ```
+
+Both residual sugar and density have a VIF higher than 10, meaning that multicolinearity is present, so we should take them out of the model. We ran the hypothesis test for removing the two predictors, and found that the test still prefered the full model. However, we decided to ignore this test for the sake of producing a model that does not contain significant correlation among the predictors.  
 
 ```{r}
 model8_white <- glm(quality_cat ~ fixed.acidity + volatile.acidity + citric.acid + chlorides + total.sulfur.dioxide + pH + sulphates                                 + alcohol,
                     family='binomial', data=train_white)
 summary(model8_white)
 ```
-
-Both residual sugar and density have a VIF higher than 10, meaning that multicolinearity is present, so we should take them out of the model.  
 
 ```{r}
 faraway::vif(dplyr::select(train_white, c(fixed.acidity, volatile.acidity, citric.acid, chlorides, total.sulfur.dioxide, pH, sulphates, alcohol)))
@@ -590,9 +589,11 @@ TS2  #1.502435
 1-pchisq(TS2, 3)
 ```
 
-Our $\chi^{2}$ test statistic is 3.95 and has a corresponding p value of 0.27.  
+The $\chi^{2}$ test statistic is 3.95 and has a corresponding p value of 0.27.  
 
-Our test fails to reject, so we may remove these three variables and continue with the 5 predictor model.  
+We fail to reject the null, so we may remove these three variables and continue with the 5 predictor model.  
+
+## Assessing Predictive Accuracy
 
 ```{r}
 ##predicted survival rate for test data based on training data
@@ -612,19 +613,23 @@ auc<-performance(rates, measure = "auc")
 auc@y.values
 ```
 
-Now that we've arrived at this model, we can create an ROC curve for it. This ROC curve has an area of 0.77, which, while it doesn't always translate to a good prediction in our case, it does suggest this model predicts well.  
+Now that we've arrived at this model, we can create an ROC curve for it. This ROC curve has an area of 0.77, which doesn't always translate to high predictive accuracy in our case, it is one metric which suggests that this model predicts well in general.  
 
 
 ```{r}
+print('Confusion matrix for the 7 predictor model')
 preds_7<-predict(model7_white, newdata=test_white, type="response")
 table(test_white$quality_cat, preds_7>0.5)
 
+print('Confusion matrix for the full model')
 preds_full<-predict(full_white, newdata=test_white, type="response")
 table(test_white$quality_cat, preds_full>0.5)
 
+print('Confusion matrix for the 8 predictor model')
 preds_8<-predict(model8_white, newdata=test_white, type="response")
 table(test_white$quality_cat, preds_8>0.5)
 
+print('Confusion matrix for the 5 predictor model')
 preds_5<-predict(model5_white, newdata=test_white, type="response")
 table(test_white$quality_cat, preds_5>0.5)
 ```
@@ -662,7 +667,7 @@ ggplot(model_white, aes(logit, predictor.value))+
   facet_wrap(~predictors, scales = "free_y")
 ```
 
-None of these scatterplots show any of the predictors are clearly nonlinear, so there is no need to do any transformations.  
+None of these scatterplots show any of the predictors are clearly nonlinear, so there is no need to do any transformations. Many transformation were tried in the course of model building, but none were significant, so they were not included in any model.  
 
 ```{r}
 res<-model5_white$residuals
@@ -683,7 +688,18 @@ plot(model5_white$fitted.values,ext.student.res,
 
 ```
 
-According to these plots, there doesn't seem to be any outliers in the residuals.
+According to these plots, there doesn't seem to be any outliers in the residuals. Therefore, there shouldn't be any highly influential points in the model.  
+
+## Final White Wine Model Assessment  
+
+The final white wine model does not predict as well as the red wine model. This seems counter intuitive because there are nearly three times more observations in the white wine model, and there were a higher proportion of high quality white wines to low quality ones.  
+
+One possible explanation comes from our EDA section. White wine's quality appears slightly less correlated with the predictors, which could explain why it is more difficult to judge them.  
+Another cause could be that white wines have a small but detectable increase in the variation in quality over red wines (~0.2 of a point). However, this doesn't seem like it would be high enough to justify a predictive accuracy that is this much lower.  
+
+Errors in modeling could also cause us not to have found a model which exists and has a very high predictive accuracy. But, this too seems unlikely, since all four of the models fit in this section have nearly identical predictive accuracy.  
+
+The true reason why our models for red wine predicted so much better than white could be a combination of all three of these problems and more that we did not list.
 
 
 

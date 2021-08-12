@@ -340,12 +340,12 @@ Next, we decide to compare our 7-predictor model to the full (10-predictor) mode
 The null hypothesis is:
 
 [comment]: <> (Ho:beta(pH)=beta(citric.acid)=beta(total.sulfur.dioxide)=0)  
-$H_{0} : \beta_{citic.acid} = \beta_{total.sulfur.dioxide} = 0$  
+$H_{0} : \beta_{citic.acid} = \beta_{total.sulfur.dioxide} = \beta_{pH} = 0$  
 
 versus the alternative hypothesis: 
 
 [comment]: <> (Ha:at least one of the coefficients is not zero.)  
-$H_{a} : \beta_{citric.acid} \neq 0 \text{ or } \beta_{total.sulfur.dioxide} \neq 0$
+$H_{a} : \exists x \in \{citric.acid, total.sulfur.dioxide, pH\} s.t. \beta_{x} \neq 0$
 
 Again we calculate the test statistic, and compare it with a $\chi^{2}$ distribution with 3 degrees of freedom (as we are testing 3 coefficients). For this comparison, the test statistic is the difference in the residual deviances of both models.
 ```{r}

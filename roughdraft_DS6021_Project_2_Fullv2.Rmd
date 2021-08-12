@@ -195,6 +195,13 @@ which.min(summary(allreg_red)$bic)
 #model 7 based on BIC
 ```
 
+```{r}
+metrics <- data.frame(c('BIC', 'Mallows CP', 'Adjusted R squared'), 
+           c(which.min(summary(allreg_red)$bic), which.min(summary(allreg_red)$cp), which.max(summary(allreg_red)$adjr2)))
+colnames(metrics) <- c('Critera', 'Number of predictors selected')
+metrics
+```
+
 After running the algorithm, we extract the best models based on the following criteria: Adjusted $R^{2}$, Mallows $C_p$, and BIC. For allreg_red, model 9 has the best adjusted $R^{2}$, model 8 has the best Mallow's $C_p$ and model 7 has the best BIC. In our case, the model number corresponds to the number of predictors being used. Based on these results, we select the proposed 7-predictor model for our initial model building process. We came to this consensus to reduce model complexity as the three proposed models were deemed valid. The 7-predictor model uses the following predictor variables to classify the quality of red wine as "low" or "high": alcohol, volatile.acidity, sulphates, fixed.acidity, density, residual.sugar and chlorides.
 
 ```{r}

@@ -207,6 +207,8 @@ The fitted 7-predictor logistic regression equation for red wine is displayed as
 
 log(pi(quality)/1+pi(quality)) = 285.10221 + (0.72351)alcohol + (-2.82651)volatile.acidity + (3.23950)sulphates +  (0.36775)fixed.acidity + (-299.78128)density + (0.17416)residual.sugar + (-7.54886)chlorides  
 
+$\log{\big(\frac{\hat\pi_{quality\_cat}}{1 - \hat\pi_{quality\_cat}}\big)} = 285.10221 + 0.72351*x_{alcohol} - 2.82651*x_{volatile.acidity} + 3.23950*x_{sulphates} +  (0.36775)x_{fixed.acidity} - 299.78128*x_{density} + 0.17416*x_{residual.sugar} - 7.54886*x_{chlorides}$
+
 The Z test associated with all the coefficients are considered statistically significant at the .05 level, which suggests that all 7 predictor variables should be kept in our model. 
 
 ## Model Diagnostics 
@@ -263,7 +265,7 @@ plot(model1_red$fitted.values,ext.student.res,
 ```
 The resulting plots look very similar, which leads us to believe there are no outliers in our model. 
 
-Next, we calculate leverages to identify how far each observation is from the center of the predictor space. If the leverage is greater than 2p/n, the associated observation may be deemed to have high leverage and is considered outlying in the predictor space. In this case p, which corresponds to the number of predictor variables in our model, is 7 and n, the number of records in our training set for red wine, is 1279. 
+Next, we calculate leverages to identify how far each observation is from the center of the predictor space. If the leverage is greater than $\frac{2p}{n}$, the associated observation may be deemed to have high leverage and is considered outlying in the predictor space. In this case p, which corresponds to the number of predictor variables in our model, is 7 and n, the number of records in our training set for red wine, is 1279. 
 ```{r, out.lines=5} 
 #leverage
 p <- 7 #7 predictor model
@@ -305,14 +307,17 @@ First, we compare our 7-predictor model to the intercept only model.
 
 The null hypothesis is:
 
-Ho:beta(alcohol)=beta(volatile.acidity)=beta3(sulphates)=beta4(fixed.acidity)=beta5(density)=beta6(residual.sugar)=
-beta7(chlorides)=0 
+[comment]: <> (The orginial text here, in case we want to go back to this -- Ho:beta(alcohol)=beta(volatile.acidity)=beta3(sulphates)=beta4(fixed.acidity)=beta5(density)=beta6(residual.sugar)= beta7(chlorides)=0)   
+
+$H_{0} : \beta_{1} = \beta_{2} = \ldots = \beta_{7} = 0$  
 
 versus the alternative hypothesis:
 
-Ha:at least one of the coefficients is not zero. 
+$H_{a} : \exists x \in \{1, 2, \ldots , 7\} s.t. \beta_{x} \neq 0$
 
-We calculate the test statistic, deltaG^2, which measures the difference in loglikelihoods of the models we are comparing, and compare it with a chi square distribution, where the degrees of freedom equal the number of coefficients we are testing (7). For this comparison, the test statistic is the difference in the null deviance and residual deviance of the 7-predictor model.
+[comment]: <> (Ha:at least one of the coefficients is not zero.) 
+
+We calculate the test statistic, $\Delta G^2$, which measures the difference in loglikelihoods of the models we are comparing, and compare it with a $\chi^{2}$ distribution, where the degrees of freedom equal the number of coefficients we are testing (7). For this comparison, the test statistic is the difference in the null deviance and residual deviance of the 7-predictor model.
 ```{r}
 #TESTING MODEL 7-PRED MODEL
 #############################################################
@@ -335,13 +340,15 @@ Next, we decide to compare our 7-predictor model to the full (10-predictor) mode
 
 The null hypothesis is:
 
-Ho:beta(pH)=beta(citric.acid)=beta(total.sulfur.dioxide)=0
+[comment]: <> (Ho:beta(pH)=beta(citric.acid)=beta(total.sulfur.dioxide)=0)  
+$H_{0} : \beta_{citic.acid} = \beta_{total.sulfur.dioxide} = 0$  
 
 versus the alternative hypothesis: 
 
-Ha:at least one of the coefficients is not zero. 
+[comment]: <> (Ha:at least one of the coefficients is not zero.)  
+$H_{a} : \beta_{citric.acid} \neq 0 \text{ or } \beta_{total.sulfur.dioxide} \neq 0$
 
-Again we calculate the test statistic, and compare it with a chi square distribution with 3 degrees of freedom (as we are testing 3 coefficients). For this comparison, the test statistic is the difference in the residual deviances of both models.
+Again we calculate the test statistic, and compare it with a $\chi^{2}$ distribution with 3 degrees of freedom (as we are testing 3 coefficients). For this comparison, the test statistic is the difference in the residual deviances of both models.
 ```{r}
 #test if 7-predictor model more useful then full (10 predictor model)
 #H0: beta8=beta9=beta10=0
@@ -353,6 +360,7 @@ TS2  #13.3604
 #pvalue
 1-pchisq(TS2,3) #0.003918644
 ```
+
 The generated test statistic is 13.3604 with an associated p-value of 0.003918644. Therefore, we reject the null hypothesis and conclude that the full (10-predictor) model is more useful than the 7-predictor model.
 
 We found this result to be interesting, and decided to explore the full model in more depth.
@@ -360,6 +368,7 @@ We found this result to be interesting, and decided to explore the full model in
 ```{r}
 summary(full_red)
 ```
+
 We see that the Z test scores associated with the coefficients for predictors pH and citric.acid are insignificant. The next step is to compute VIFs for each of the 10 predictors in the full model to determine if multicollinearity exists between any of the variables.
 
 ```{r}
@@ -369,19 +378,24 @@ faraway::vif(dplyr::select(train_red, c(alcohol,volatile.acidity,sulphates,fixed
 #no multicollinearity, pH and citric.acid appear to not be significant predictors (based on 
 #wald test scores), can drop, end up with 8-predictor model
 ```
+
 The resulting VIFs suggests that none of the variables are linearly dependent on one another, and we conclude that pH and citric.acid are not significant predictors for classifying red wine as "low" or "high" an drop them from the full model. 
 
+Although it is not necessary to test when dropping predictors due to high multicolinearity, we will run the test just to be safe.  
 To validate dropping both of these predictors from the full model, we compare our 8-predictor model to the full (10-predictor) model. 
 
 The null hypothesis is:
 
-Ho:beta(pH)=beta(citric.acid)=0
+[comment]: <> (Ho:beta(pH)=beta(citric.acid)=0)  
+$H_{0} : \beta_{citric.acid} = \beta_{pH} = 0$  
 
 versus the alternative hypothesis: 
 
-Ha: at least one of the coefficients is not zero. 
+[comment]: <> (Ha: at least one of the coefficients is not zero.)  
+$H_{a} : \beta_{citric.acid} \neq 0 \text{ or } \beta_{pH} \neq 0$  
 
-Again we calculate the test statistic, and compare it with a chi square distribution with 2 degrees of freedom (as we are testing 2 coefficients). 
+Again we calculate the test statistic, and compare it with a $\chi^{2}$ distribution with 2 degrees of freedom (as we are testing 2 coefficients).  
+
 ```{r}
 #8-predictor model
 model2_red <- glm(quality_cat~alcohol+volatile.acidity+sulphates+fixed.acidity+density+residual.sugar+chlorides+
@@ -395,17 +409,20 @@ TS3<-model2_red$deviance-full_red$deviance
 TS3
 1-pchisq(TS3,2) #p-value: 0.5319783
 ```
+
 The generated test statistic is 1.262305 with an associated p-value of 0.5319783. Therefore, we fail to reject the null hypothesis and select the 8-predictor model over the full model.
 
 The fitted 8-predictor logistic regression equation for red wine is displayed as follows:
 
-log(pi(quality)/1+pi(quality)) = 316.5 + (0.6657)alcohol + (-2.720)volatile.acidity + (3.739)sulphates +  (0.3373)fixed.acidity + (-330.4)density + (0.2517)residual.sugar + (-8.472)chlorides + (-0.01188)total.sulfur.dioxide
+[comment]: <> (log(pi(quality)/1+pi(quality)) = 316.5 + (0.6657)alcohol + (-2.720)volatile.acidity + (3.739)sulphates +  (0.3373)fixed.acidity + (-330.4)density + (0.2517)residual.sugar + (-8.472)chlorides + (-0.01188)total.sulfur.dioxide))  
+$\log{\big(\frac{\hat\pi_{quality\_cat}}{1 - \hat\pi_{quality\_cat}}\big)} = 316.5 + 0.6657*x_{alcohol} - 2.720*x_{volatile.acidity} + 3.739*x_{sulphates} +  0.3373*x_{fixed.acidity} - 330.4*x_{density} + 0.2517*x_{residual.sugar} - 8.472*x_{chlorides} - 0.01188*x_{total.sulfur.dioxide}$
 
 We now have two candidate models for classifying the quality of red wine: our original 7-predictor model (model1_red) and the 8-predictor model (model2_red). We decide to test both these models using the test_red dataset in order to determine which is more useful in answering our research question. 
 
 ## Model Validation with Test Dataset
 
 First, we store the predicted probabilities of the test_red data based on our 7-predictor logistic regression model in the variable preds. We then transform this data using the prediction() function and store the values of the true positive rate and false positive rate in the roc_result object. We then use this object to generate a ROC curve for our 7-predictor logistic regression model. The ROC curve plots the true positive rate (TPR) against the false positive rate (FPR) of the model as the threshold value is varied from 0 to 1. The ROC curve generated by our 7-predictor model lies above the diagonal, which indicates the logistic regression does a better job than random guessing when classifying red wines as "low" or "high" quality. We also generate an Area Under the Curve (AUC) associated with this ROC curve. The AUC value for our model is 0.889574, which again provides evidence that our model does better at classifying red wines then random guessing (represented by an AUC score of 0.5). Finally, we produce a confusion matrix, which contains the number of observations in each class ("low" and "high" quality red wine) and the number of predicted observations in each class (for test_red) generated by our 7-predictor model using a threshold value of 0.5. 
+
 ```{r}
 #ROC/AUC/CONFUSION MATRIX TO COMPARE 7 AND 8-PRED MODELS 
 #####################################################
@@ -430,6 +447,7 @@ table(test_red$quality_cat, preds>0.50)
 ```
 
 Next, we follow a similar assessment procedure using the test_red dataset and the 8-predictor model.The ROC curve generated by our 8-predictor model lies above the diagonal, which indicates the logistic regression does a better job than random guessing when classifying red wines as "low" or "high" quality.  The AUC value for this model is 0.8978096, which again provides evidence that our 8-predictor model does slightly better at classifying red wines than our 7-predictor model. Finally, we produce a confusion matrix generated by the 8-predictor model using a threshold value of 0.5. 
+
 ```{r}
 #####################################################
 ##ROC AND AUC FOR 8-predictor MODEL##
@@ -450,6 +468,7 @@ auc_full@y.values #0.8978096, suggests are model classify observations better th
 table(test_red$quality_cat, preds_2>0.50)
 #####################################################
 ```
+
 In terms of our research question, we are most interested in maximizing the ratio of the true positive results to the false positive results. The number of false positive results (low quality wines incorrectly categorized as high quality) is 6 and the number of true positive results (high quality wines correctly categorized as high quality) is 15 for our 7-predictor model, whereas the number of false positive results is 9 and the number of true positive results is 15 for our 8-predictor model. The calculated ratio of true positive results to false positive results is larger for our 7-predictor model, at .714, so we select it over the 8-predictor model, at .625. 
 
 
